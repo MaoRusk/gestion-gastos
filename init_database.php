@@ -59,13 +59,35 @@ if ($sql === false) {
 
 echo "<p class='info'>📄 Usando archivo: <strong>" . htmlspecialchars($schema_file) . "</strong></p>";
 
-// Convertir esquema SQLite a MySQL si es necesario
-if (isset($link->type) && $link->type === 'mysql') {
-    // Reemplazar tipos SQLite por MySQL
-    $sql = str_replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'INT AUTO_INCREMENT PRIMARY KEY', $sql);
-    $sql = str_replace('BOOLEAN', 'TINYINT(1)', $sql);
-    $sql = str_replace('DATETIME DEFAULT CURRENT_TIMESTAMP', 'DATETIME DEFAULT CURRENT_TIMESTAMP', $sql);
-    $sql = str_replace('CREATE TABLE sqlite_sequence', '-- CREATE TABLE sqlite_sequence', $sql);
+// Convertir esquema según el tipo de base de datos
+if (isset($link->type)) {
+    if ($link->type === 'mysql') {
+        // Reemplazar tipos SQLite por MySQL
+        $sql = str_replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'INT AUTO_INCREMENT PRIMARY KEY', $sql);
+        $sql = str_replace('BOOLEAN', 'TINYINT(1)', $sql);
+        $sql = str_replace('DATETIME DEFAULT CURRENT_TIMESTAMP', 'DATETIME DEFAULT CURRENT_TIMESTAMP', $sql);
+        $sql = str_replace('CREATE TABLE sqlite_sequence', '-- CREATE TABLE sqlite_sequence', $sql);
+        $sql = preg_replace('/USE\s+\w+;/i', '', $sql); // Remover USE statements
+    } elseif ($link->type === 'postgresql') {
+        // Convertir MySQL/SQLite a PostgreSQL
+        $sql = str_replace('INT AUTO_INCREMENT PRIMARY KEY', 'SERIAL PRIMARY KEY', $sql);
+        $sql = str_replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY', $sql);
+        $sql = str_replace('AUTO_INCREMENT', '', $sql);
+        $sql = str_replace('TINYINT(1)', 'BOOLEAN', $sql);
+        $sql = str_replace('BOOLEAN DEFAULT 1', 'BOOLEAN DEFAULT TRUE', $sql);
+        $sql = str_replace('BOOLEAN DEFAULT 0', 'BOOLEAN DEFAULT FALSE', $sql);
+        $sql = str_replace('BOOLEAN DEFAULT TRUE', 'BOOLEAN DEFAULT TRUE', $sql);
+        $sql = str_replace('DATETIME', 'TIMESTAMP', $sql);
+        $sql = str_replace('ON UPDATE CURRENT_TIMESTAMP', '', $sql);
+        $sql = preg_replace('/USE\s+\w+;/i', '', $sql); // Remover USE statements
+        $sql = preg_replace('/ENGINE\s*=\s*\w+/i', '', $sql); // Remover ENGINE clauses
+        $sql = preg_replace('/DEFAULT CHARSET\s*=\s*\w+/i', '', $sql); // Remover CHARSET
+        $sql = preg_replace('/COLLATE\s*=\s*\w+/i', '', $sql); // Remover COLLATE
+        // Convertir AUTO_INCREMENT a SERIAL
+        $sql = preg_replace('/\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT/i', ' SERIAL', $sql);
+        // Convertir UNIQUE NOT NULL a UNIQUE
+        $sql = preg_replace('/UNIQUE\s+NOT\s+NULL/i', 'UNIQUE', $sql);
+    }
 }
 
 // Dividir en declaraciones

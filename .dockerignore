@@ -1,0 +1,13 @@
+.git
+.gitignore
+README.md
+DEPLOY-RENDER.md
+QUICK-START-RENDER.md
+.vscode
+.idea
+database/*.db
+database/*.sqlite
+*.log
+node_modules
+vendor
+
