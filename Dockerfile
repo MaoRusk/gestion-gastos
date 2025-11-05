@@ -1,22 +1,25 @@
 # Dockerfile para PHP en Render.com
-FROM php:8.1-apache
+FROM php:8.1-cli
 
-# Instalar extensiones PHP necesarias
-RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql mysqli
-
-# Habilitar mod_rewrite de Apache
-RUN a2enmod rewrite
+# Instalar dependencias del sistema necesarias para PostgreSQL y MySQL
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    libzip-dev \
+    && docker-php-ext-install pdo pdo_mysql pdo_pgsql mysqli \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copiar archivos de la aplicación
 COPY . /var/www/html/
 
+# Establecer directorio de trabajo
+WORKDIR /var/www/html
+
 # Configurar permisos
-RUN chown -R www-data:www-data /var/www/html
 RUN chmod -R 755 /var/www/html
 
-# Exponer puerto 80
-EXPOSE 80
+# Exponer puerto (Render usará la variable $PORT)
+EXPOSE 8080
 
-# Comando por defecto (Apache se inicia automáticamente)
-CMD ["apache2-foreground"]
-
+# Usar el servidor PHP built-in (más simple para Render con puertos dinámicos)
+CMD php -S 0.0.0.0:${PORT:-8080} -t .
