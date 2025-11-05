@@ -72,7 +72,8 @@ $gmailpassword = ''; // YOUR gmail password
 $gmailusername = ''; // YOUR gmail User name
 
 // Include database compatibility functions if needed
-if (!extension_loaded('mysqli') && (extension_loaded('pdo_mysql') || extension_loaded('pdo_sqlite') || extension_loaded('pdo_pgsql'))) {
+// Load when using PDO (SQLite, PostgreSQL, or MySQL via PDO) or when mysqli is not available
+if (isset($link) && (isset($link->pdo) || (!extension_loaded('mysqli') && (extension_loaded('pdo_mysql') || extension_loaded('pdo_sqlite') || extension_loaded('pdo_pgsql'))))) {
     require_once 'includes/database_compat.php';
 }
 
