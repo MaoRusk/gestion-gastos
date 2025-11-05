@@ -128,9 +128,23 @@ function loginUser($email, $password) {
     // Check if using PDO (PostgreSQL, SQLite, or MySQL via PDO)
     if (isset($link->pdo)) {
         // Use PDO directly
-        $stmt = $link->pdo->prepare($sql);
-        $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $link->pdo->prepare($sql);
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Check if error is about table not existing
+            if (strpos($e->getMessage(), 'does not exist') !== false || 
+                strpos($e->getMessage(), 'Undefined table') !== false ||
+                strpos($e->getMessage(), 'relation') !== false) {
+                return [
+                    'success' => false, 
+                    'message' => 'La base de datos no está inicializada. Por favor ejecuta: /init_database.php',
+                    'needs_init' => true
+                ];
+            }
+            throw $e; // Re-throw if it's a different error
+        }
         
         if ($user && password_verify($password, $user['password_hash'])) {
             // Iniciar sesión

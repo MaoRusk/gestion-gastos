@@ -70,23 +70,36 @@ if (isset($link->type)) {
         $sql = preg_replace('/USE\s+\w+;/i', '', $sql); // Remover USE statements
     } elseif ($link->type === 'postgresql') {
         // Convertir MySQL/SQLite a PostgreSQL
+        // Remover USE statements primero
+        $sql = preg_replace('/USE\s+\w+;/i', '', $sql);
+        
+        // Convertir AUTO_INCREMENT a SERIAL (múltiples patrones)
+        $sql = preg_replace('/\s+INT\s+AUTO_INCREMENT\s+PRIMARY\s+KEY/i', ' SERIAL PRIMARY KEY', $sql);
+        $sql = preg_replace('/\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT/i', ' SERIAL', $sql);
+        $sql = preg_replace('/\s+INT\s+AUTO_INCREMENT/i', ' SERIAL', $sql);
         $sql = str_replace('INT AUTO_INCREMENT PRIMARY KEY', 'SERIAL PRIMARY KEY', $sql);
         $sql = str_replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY', $sql);
         $sql = str_replace('AUTO_INCREMENT', '', $sql);
+        
+        // Convertir tipos de datos
         $sql = str_replace('TINYINT(1)', 'BOOLEAN', $sql);
         $sql = str_replace('BOOLEAN DEFAULT 1', 'BOOLEAN DEFAULT TRUE', $sql);
         $sql = str_replace('BOOLEAN DEFAULT 0', 'BOOLEAN DEFAULT FALSE', $sql);
-        $sql = str_replace('BOOLEAN DEFAULT TRUE', 'BOOLEAN DEFAULT TRUE', $sql);
         $sql = str_replace('DATETIME', 'TIMESTAMP', $sql);
-        $sql = str_replace('ON UPDATE CURRENT_TIMESTAMP', '', $sql);
-        $sql = preg_replace('/USE\s+\w+;/i', '', $sql); // Remover USE statements
-        $sql = preg_replace('/ENGINE\s*=\s*\w+/i', '', $sql); // Remover ENGINE clauses
-        $sql = preg_replace('/DEFAULT CHARSET\s*=\s*\w+/i', '', $sql); // Remover CHARSET
-        $sql = preg_replace('/COLLATE\s*=\s*\w+/i', '', $sql); // Remover COLLATE
-        // Convertir AUTO_INCREMENT a SERIAL
-        $sql = preg_replace('/\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT/i', ' SERIAL', $sql);
-        // Convertir UNIQUE NOT NULL a UNIQUE
+        
+        // Remover ON UPDATE CURRENT_TIMESTAMP (no soportado en PostgreSQL)
+        $sql = preg_replace('/\s+ON\s+UPDATE\s+CURRENT_TIMESTAMP/i', '', $sql);
+        
+        // Remover ENGINE, CHARSET, COLLATE
+        $sql = preg_replace('/\s+ENGINE\s*=\s*\w+/i', '', $sql);
+        $sql = preg_replace('/\s+DEFAULT\s+CHARSET\s*=\s*\w+/i', '', $sql);
+        $sql = preg_replace('/\s+COLLATE\s*=\s*\w+/i', '', $sql);
+        
+        // Convertir UNIQUE NOT NULL a UNIQUE (PostgreSQL no necesita NOT NULL con UNIQUE)
         $sql = preg_replace('/UNIQUE\s+NOT\s+NULL/i', 'UNIQUE', $sql);
+        
+        // Convertir comentarios de MySQL a PostgreSQL
+        $sql = str_replace('-- ============================================================================', '--', $sql);
     }
 }
 
@@ -127,9 +140,23 @@ foreach ($statements as $statement) {
         } else {
             // Usando PDO
             if (isset($link->pdo)) {
-                $link->pdo->exec($statement);
-                $success_count++;
-                echo "<p class='success'>✅ " . htmlspecialchars(substr($statement, 0, 60)) . "...</p>";
+                try {
+                    $link->pdo->exec($statement);
+                    $success_count++;
+                    echo "<p class='success'>✅ " . htmlspecialchars(substr($statement, 0, 60)) . "...</p>";
+                } catch (PDOException $pdo_e) {
+                    $error_count++;
+                    $error_msg = $pdo_e->getMessage();
+                    $errors[] = $error_msg;
+                    // Ignorar errores de "table already exists", "relation already exists", etc.
+                    if (strpos($error_msg, 'already exists') === false && 
+                        strpos($error_msg, 'Duplicate') === false &&
+                        strpos($error_msg, 'relation') === false &&
+                        strpos($error_msg, 'does not exist') === false) {
+                        echo "<p class='error'>⚠️ Error: " . htmlspecialchars($error_msg) . "</p>";
+                        echo "<pre>" . htmlspecialchars(substr($statement, 0, 200)) . "...</pre>";
+                    }
+                }
             }
         }
     } catch (Exception $e) {
@@ -139,7 +166,8 @@ foreach ($statements as $statement) {
         // Ignorar errores de "table already exists" y "duplicate key"
         if (strpos($error_msg, 'already exists') === false && 
             strpos($error_msg, 'Duplicate') === false &&
-            strpos($error_msg, 'Unknown table') === false) {
+            strpos($error_msg, 'Unknown table') === false &&
+            strpos($error_msg, 'relation') === false) {
             echo "<p class='error'>⚠️ Error: " . htmlspecialchars($error_msg) . "</p>";
         }
     }
