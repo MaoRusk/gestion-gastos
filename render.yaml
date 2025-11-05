@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: sistema-gastos-fime
+    env: php
+    buildCommand: ""
+    startCommand: php -S 0.0.0.0:$PORT -t .
+    envVars:
+      - key: PHP_VERSION
+        value: 8.1
+      - key: DB_TYPE
+        value: mysql
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+
+databases:
+  - name: fime-gastos-db
+    databaseName: fime_gastos
+    user: fime_gastos_user
+    plan: free
+

@@ -1,10 +1,11 @@
 <?php
-/* Database configuration - Using SQLite for easy setup */
-define('DB_TYPE', 'sqlite'); // 'mysql' or 'sqlite'
-define('DB_SERVER', 'localhost');
-define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'fime_gastos');
+/* Database configuration - Using environment variables for production */
+// Use environment variables if available (for Render.com), otherwise use defaults for local development
+define('DB_TYPE', getenv('DB_TYPE') ?: 'mysql'); // 'mysql' or 'sqlite'
+define('DB_SERVER', getenv('DB_HOST') ?: 'localhost');
+define('DB_USERNAME', getenv('DB_USER') ?: 'root');
+define('DB_PASSWORD', getenv('DB_PASSWORD') ?: '');
+define('DB_NAME', getenv('DB_NAME') ?: 'fime_gastos');
 define('DB_FILE', 'database/fime_gastos.db');
 
 // Create database directory if it doesn't exist

@@ -1,0 +1,144 @@
+<?php
+/**
+ * Script de inicialización de base de datos para producción (Render.com)
+ * Este script se ejecuta automáticamente después del deploy
+ * 
+ * Acceso: https://tu-app.onrender.com/init_database.php
+ */
+
+// Incluir configuración
+require_once "layouts/config.php";
+
+header('Content-Type: text/html; charset=utf-8');
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inicialización de Base de Datos</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 8px; max-width: 800px; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Inicialización de Base de Datos</h1>
+        <p>Este script configurará la base de datos para el sistema de gastos personales.</p>
+        <hr>
+
+<?php
+// Verificar conexión
+if (!isset($link)) {
+    die("<p class='error'>❌ No se pudo establecer conexión a la base de datos.</p>");
+}
+
+echo "<p class='info'>ℹ️ Tipo de base de datos: " . (isset($link->type) ? $link->type : 'mysql') . "</p>";
+
+// Leer el esquema SQL - Priorizar el archivo completo de MySQL/MariaDB
+$schema_file = null;
+if (file_exists('database_completo_mariaDB.sql')) {
+    $schema_file = 'database_completo_mariaDB.sql';
+} elseif (file_exists('database_schema.sql')) {
+    $schema_file = 'database_schema.sql';
+} elseif (file_exists('fime_gastos_database.sql')) {
+    $schema_file = 'fime_gastos_database.sql';
+}
+
+if (!$schema_file || !file_exists($schema_file)) {
+    die("<p class='error'>❌ No se encontró ningún archivo SQL de esquema.</p>");
+}
+
+$sql = file_get_contents($schema_file);
+if ($sql === false) {
+    die("<p class='error'>❌ No se pudo leer el archivo " . htmlspecialchars($schema_file) . "</p>");
+}
+
+echo "<p class='info'>📄 Usando archivo: <strong>" . htmlspecialchars($schema_file) . "</strong></p>";
+
+// Convertir esquema SQLite a MySQL si es necesario
+if (isset($link->type) && $link->type === 'mysql') {
+    // Reemplazar tipos SQLite por MySQL
+    $sql = str_replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'INT AUTO_INCREMENT PRIMARY KEY', $sql);
+    $sql = str_replace('BOOLEAN', 'TINYINT(1)', $sql);
+    $sql = str_replace('DATETIME DEFAULT CURRENT_TIMESTAMP', 'DATETIME DEFAULT CURRENT_TIMESTAMP', $sql);
+    $sql = str_replace('CREATE TABLE sqlite_sequence', '-- CREATE TABLE sqlite_sequence', $sql);
+}
+
+// Dividir en declaraciones
+$statements = array_filter(
+    array_map('trim', explode(';', $sql)),
+    function($stmt) {
+        return !empty($stmt) && 
+               !preg_match('/^(CREATE DATABASE|USE)/i', $stmt) &&
+               !preg_match('/^--/', $stmt);
+    }
+);
+
+$success_count = 0;
+$error_count = 0;
+$errors = [];
+
+foreach ($statements as $statement) {
+    if (empty($statement)) continue;
+    
+    try {
+        if (extension_loaded('mysqli') && is_object($link) && !isset($link->pdo)) {
+            // Usando mysqli
+            if (mysqli_query($link, $statement)) {
+                $success_count++;
+                echo "<p class='success'>✅ " . htmlspecialchars(substr($statement, 0, 60)) . "...</p>";
+            } else {
+                $error_count++;
+                $error_msg = mysqli_error($link);
+                $errors[] = $error_msg;
+                // Ignorar errores de "table already exists" y "duplicate key"
+                if (strpos($error_msg, 'already exists') === false && 
+                    strpos($error_msg, 'Duplicate') === false) {
+                    echo "<p class='error'>⚠️ Error: " . htmlspecialchars($error_msg) . "</p>";
+                    echo "<pre>" . htmlspecialchars(substr($statement, 0, 200)) . "...</pre>";
+                }
+            }
+        } else {
+            // Usando PDO
+            if (isset($link->pdo)) {
+                $link->pdo->exec($statement);
+                $success_count++;
+                echo "<p class='success'>✅ " . htmlspecialchars(substr($statement, 0, 60)) . "...</p>";
+            }
+        }
+    } catch (Exception $e) {
+        $error_count++;
+        $error_msg = $e->getMessage();
+        $errors[] = $error_msg;
+        // Ignorar errores de "table already exists" y "duplicate key"
+        if (strpos($error_msg, 'already exists') === false && 
+            strpos($error_msg, 'Duplicate') === false &&
+            strpos($error_msg, 'Unknown table') === false) {
+            echo "<p class='error'>⚠️ Error: " . htmlspecialchars($error_msg) . "</p>";
+        }
+    }
+}
+
+echo "<hr>";
+echo "<h2>📊 Resumen</h2>";
+echo "<p class='success'>✅ Comandos ejecutados exitosamente: <strong>$success_count</strong></p>";
+echo "<p class='error'>⚠️ Errores encontrados: <strong>$error_count</strong></p>";
+
+if ($error_count == 0 || (count($errors) > 0 && 
+    (strpos(implode(' ', $errors), 'already exists') !== false || 
+     strpos(implode(' ', $errors), 'Duplicate') !== false))) {
+    echo "<p class='success'><strong>🎉 ¡Base de datos configurada completamente!</strong></p>";
+    echo "<p>Puedes acceder al sistema en: <a href='index.php'>Iniciar Sesión</a></p>";
+} else {
+    echo "<p class='error'>Por favor, revisa los errores anteriores.</p>";
+}
+?>
+
+    </div>
+</body>
+</html>
+

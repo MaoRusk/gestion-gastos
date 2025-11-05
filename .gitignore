@@ -1,0 +1,50 @@
+# Archivos de configuración local
+layouts/config.local.php
+
+# Base de datos SQLite local
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+
+# Archivos de sesión
+sessions/
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Vendor (si usas Composer)
+vendor/
+composer.lock
+
+# Node modules (si usas npm)
+node_modules/
+package-lock.json
+
+# Archivos de backup
+*.bak
+*.backup
+*_backup.sql
+
+# Variables de entorno locales (no commitees credenciales)
+.env
+.env.local
+
