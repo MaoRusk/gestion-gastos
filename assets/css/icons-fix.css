@@ -1,0 +1,61 @@
+/* Fix para iconos de Remix Icons */
+@font-face {
+    font-family: 'remixicon';
+    src: url('../fonts/remixicon.eot');
+    src: url('../fonts/remixicon.eot?#iefix') format('embedded-opentype'),
+         url('../fonts/remixicon.woff2') format('woff2'),
+         url('../fonts/remixicon.woff') format('woff'),
+         url('../fonts/remixicon.ttf') format('truetype'),
+         url('../fonts/remixicon.svg#remixicon') format('svg');
+    font-display: swap;
+}
+
+/* Asegurar que los iconos se muestren correctamente */
+[class^="ri-"], [class*=" ri-"] {
+    font-family: 'remixicon' !important;
+    font-style: normal;
+    font-variant: normal;
+    text-rendering: auto;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Iconos específicos que podrían tener problemas */
+.ri-dashboard-2-line:before { content: "\ea6e"; }
+.ri-wallet-3-line:before { content: "\f1b5"; }
+.ri-exchange-cny-line:before { content: "\eb0a"; }
+.ri-folder-2-line:before { content: "\ebc0"; }
+.ri-money-dollar-box-line:before { content: "\ee4e"; }
+.ri-bar-chart-box-line:before { content: "\ea1a"; }
+.ri-settings-2-line:before { content: "\f0a0"; }
+.ri-user-line:before { content: "\f1a6"; }
+.ri-question-line:before { content: "\efd4"; }
+.ri-arrow-up-line:before { content: "\ea78"; }
+.ri-arrow-down-line:before { content: "\ea6a"; }
+.ri-bank-line:before { content: "\ea0e"; }
+.ri-piggy-bank-line:before { content: "\ef4e"; }
+.ri-credit-card-line:before { content: "\ea4a"; }
+.ri-line-chart-line:before { content: "\edb0"; }
+.ri-add-circle-line:before { content: "\ea0a"; }
+.ri-add-line:before { content: "\ea0b"; }
+.ri-record-circle-line:before { content: "\ef6e"; }
+.ri-moon-line:before { content: "\ee5a"; }
+.ri-sun-line:before { content: "\f0a8"; }
+
+/* Dark mode icon switching */
+[data-layout-mode="dark"] .light-dark-mode i {
+    display: none;
+}
+
+[data-layout-mode="dark"] .light-dark-mode i.ri-sun-line {
+    display: inline-block;
+}
+
+[data-layout-mode="light"] .light-dark-mode i.ri-sun-line {
+    display: none;
+}
+
+[data-layout-mode="light"] .light-dark-mode i.ri-moon-line {
+    display: inline-block;
+}

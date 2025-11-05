@@ -33,6 +33,7 @@
                 </button>
 
                 <!-- App Search-->
+                <!--
                 <form class="app-search d-none d-md-block">
                     <div class="position-relative">
                         <input type="text" class="form-control" placeholder="Search..." autocomplete="off"
@@ -43,7 +44,7 @@
                     </div>
                     <div class="dropdown-menu dropdown-menu-lg" id="search-dropdown">
                         <div data-simplebar style="max-height: 320px;">
-                            <!-- item-->
+                            
                             <div class="dropdown-header">
                                 <h6 class="text-overflow text-muted mb-0 text-uppercase">Recent Searches</h6>
                             </div>
@@ -54,36 +55,35 @@
                                 <a href="index.php" class="btn btn-soft-secondary btn-sm btn-rounded">buttons <i
                                         class="mdi mdi-magnify ms-1"></i></a>
                             </div>
-                            <!-- item-->
+                            
                             <div class="dropdown-header mt-2">
                                 <h6 class="text-overflow text-muted mb-1 text-uppercase">Pages</h6>
                             </div>
 
-                            <!-- item-->
+                            
                             <a href="javascript:void(0);" class="dropdown-item notify-item">
                                 <i class="ri-bubble-chart-line align-middle fs-18 text-muted me-2"></i>
                                 <span>Analytics Dashboard</span>
                             </a>
 
-                            <!-- item-->
+                            
                             <a href="javascript:void(0);" class="dropdown-item notify-item">
                                 <i class="ri-lifebuoy-line align-middle fs-18 text-muted me-2"></i>
                                 <span>Help Center</span>
                             </a>
 
-                            <!-- item-->
+                            
                             <a href="javascript:void(0);" class="dropdown-item notify-item">
                                 <i class="ri-user-settings-line align-middle fs-18 text-muted me-2"></i>
                                 <span>My account settings</span>
                             </a>
 
-                            <!-- item-->
+                            
                             <div class="dropdown-header mt-2">
                                 <h6 class="text-overflow text-muted mb-2 text-uppercase">Members</h6>
                             </div>
 
                             <div class="notification-list">
-                                <!-- item -->
                                 <a href="javascript:void(0);" class="dropdown-item notify-item py-2">
                                     <div class="d-flex">
                                         <img src="assets/images/users/avatar-2.jpg"
@@ -94,7 +94,6 @@
                                         </div>
                                     </div>
                                 </a>
-                                <!-- item -->
                                 <a href="javascript:void(0);" class="dropdown-item notify-item py-2">
                                     <div class="d-flex">
                                         <img src="assets/images/users/avatar-3.jpg"
@@ -105,7 +104,6 @@
                                         </div>
                                     </div>
                                 </a>
-                                <!-- item -->
                                 <a href="javascript:void(0);" class="dropdown-item notify-item py-2">
                                     <div class="d-flex">
                                         <img src="assets/images/users/avatar-5.jpg"
@@ -125,6 +123,7 @@
                         </div>
                     </div>
                 </form>
+                -->
             </div>
 
             <div class="d-flex align-items-center">
@@ -149,7 +148,7 @@
                         </form>
                     </div>
                 </div>
-
+                <!--
                 <div class="dropdown ms-1 topbar-head-dropdown header-item">
                     <button type="button" class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle"
                         data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -158,49 +157,49 @@
                     </button>
                     <div class="dropdown-menu dropdown-menu-end">
 
-                        <!-- item-->
+                        
                         <a href="?lang=en" class="dropdown-item notify-item language py-2" data-lang="en"
                             title="English">
                             <img src="assets/images/flags/us.svg" alt="user-image" class="me-2 rounded" height="18">
                             <span class="align-middle">English</span>
                         </a>
 
-                        <!-- item-->
+                        
                         <a href="?lang=sp" class="dropdown-item notify-item language py-2 language" data-lang="sp"
                             title="Spanish">
                             <img src="assets/images/flags/spain.svg" alt="user-image" class="me-2 rounded" height="18">
                             <span class="align-middle">Española</span>
                         </a>
 
-                        <!-- item-->
+                        
                         <a href="?lang=gr" class="dropdown-item notify-item language py-2 language" data-lang="gr"
                             title="German">
                             <img src="assets/images/flags/germany.svg" alt="user-image" class="me-2 rounded"
                                 height="18"> <span class="align-middle">Deutsche</span>
                         </a>
 
-                        <!-- item-->
+                        
                         <a href="?lang=it" class="dropdown-item notify-item language py-2 language" data-lang="it"
                             title="Italian">
                             <img src="assets/images/flags/italy.svg" alt="user-image" class="me-2 rounded" height="18">
                             <span class="align-middle">Italiana</span>
                         </a>
 
-                        <!-- item-->
+                        
                         <a href="?lang=ru" class="dropdown-item notify-item language py-2 language" data-lang="ru"
                             title="Russian">
                             <img src="assets/images/flags/russia.svg" alt="user-image" class="me-2 rounded" height="18">
                             <span class="align-middle">русский</span>
                         </a>
 
-                        <!-- item-->
+                        
                         <a href="?lang=ch" class="dropdown-item notify-item language py-2 language" data-lang="ch"
                             title="Chinese">
                             <img src="assets/images/flags/china.svg" alt="user-image" class="me-2 rounded" height="18">
                             <span class="align-middle">中国人</span>
                         </a>
 
-                        <!-- item-->
+                        
                         <a href="?lang=fr" class="dropdown-item notify-item language py-2 language" data-lang="fr"
                             title="French">
                             <img src="assets/images/flags/french.svg" alt="user-image" class="me-2 rounded" height="18">
@@ -272,6 +271,7 @@
                         </div>
                     </div>
                 </div>
+
 
                 <div class="dropdown topbar-head-dropdown ms-1 header-item">
                     <button type="button" class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle"
@@ -441,7 +441,7 @@
                         </div>
                     </div>
                 </div>
-
+-->
                 <div class="ms-1 header-item d-none d-sm-flex">
                     <button type="button" class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle"
                         data-toggle="fullscreen">
@@ -455,7 +455,7 @@
                         <i class='bx bx-moon fs-22'></i>
                     </button>
                 </div>
-
+<!--
                 <div class="dropdown topbar-head-dropdown ms-1 header-item">
                     <button type="button" class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle"
                         id="page-header-notifications-dropdown" data-bs-toggle="dropdown" aria-haspopup="true"
@@ -755,7 +755,7 @@
                         </div>
                     </div>
                 </div>
-
+-->
                 <div class="dropdown ms-sm-3 header-item topbar-user">
                     <button type="button" class="btn" id="page-header-user-dropdown" data-bs-toggle="dropdown"
                         aria-haspopup="true" aria-expanded="false">
@@ -769,12 +769,12 @@
                         </span>
                     </button>
                     <div class="dropdown-menu dropdown-menu-end">
-                        <!-- item-->
+                        
                         <h6 class="dropdown-header">Welcome Anna!</h6>
-                        <a class="dropdown-item" href="pages-profile.php"><i
+                        <a class="dropdown-item" href="pages-profile-settings.php"><i
                                 class="mdi mdi-account-circle text-muted fs-16 align-middle me-1"></i> <span
                                 class="align-middle">Profile</span></a>
-                        <a class="dropdown-item" href="apps-chat.php"><i
+                        <!-- <a class="dropdown-item" href="apps-chat.php"><i
                                 class="mdi mdi-message-text-outline text-muted fs-16 align-middle me-1"></i> <span
                                 class="align-middle">Messages</span></a>
                         <a class="dropdown-item" href="apps-tasks-kanban.php"><i
@@ -792,7 +792,7 @@
                                 class="mdi mdi-cog-outline text-muted fs-16 align-middle me-1"></i> <span
                                 class="align-middle">Settings</span></a>
                         <a class="dropdown-item" href="auth-lockscreen-basic.php"><i
-                                class="mdi mdi-lock text-muted fs-16 align-middle me-1"></i> <span class="align-middle">Lock screen</span></a>
+                                class="mdi mdi-lock text-muted fs-16 align-middle me-1"></i> <span class="align-middle">Lock screen</span></a> -->
                         <a class="dropdown-item" href="logout.php"><i
                                 class="mdi mdi-logout text-muted fs-16 align-middle me-1"></i> <span
                                 class="align-middle" data-key=t-logout><?=$lang['t-logout']?></span></a>

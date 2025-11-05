@@ -15,7 +15,8 @@
         <!-- Begin page -->
         <div id="layout-wrapper">
 
-            <?php include 'layouts/menu.php'; ?>
+            <?php include 'layouts/topbar.php'; ?>
+            <?php include 'layouts/sidebar-gastos.php'; ?>
 
             <!-- ============================================================== -->
             <!-- Start right Content here -->
@@ -729,10 +730,6 @@
 
         </div>
         <!-- END layout-wrapper -->
-
-        
-
-        <?php include 'layouts/customizer.php'; ?>
 
         <?php include 'layouts/vendor-scripts.php'; ?>
 

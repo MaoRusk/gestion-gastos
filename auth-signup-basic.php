@@ -1,114 +1,80 @@
 <?php
-// Include config file
+// Include config file and auth functions
 require_once "layouts/config.php";
+require_once "includes/auth_functions.php";
+
+// Check if the user is already logged in, if yes then redirect him to dashboard
+if (isLoggedIn()) {
+    header("location: dashboard-gastos.php");
+    exit;
+}
 
 // Define variables and initialize with empty values
-$useremail = $username =  $password = $confirm_password = "";
-$useremail_err = $username_err = $password_err = $confirm_password_err = "";
+$nombre = $email = $password = $confirm_password = $telefono = $fecha_nacimiento = "";
+$nombre_err = $email_err = $password_err = $confirm_password_err = "";
+$register_message = "";
 
 // Processing form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
-    // Validate useremail
-    if (empty(trim($_POST["useremail"]))) {
-        $useremail_err = "Please enter a useremail.";
-    } elseif (!filter_var($_POST["useremail"], FILTER_VALIDATE_EMAIL)) {
-        $useremail_err = "Invalid email format";
+    // Validate nombre
+    if (empty(trim($_POST["nombre"]))) {
+        $nombre_err = "Por favor ingresa tu nombre.";
     } else {
-        // Prepare a select statement
-        $sql = "SELECT id FROM users WHERE useremail = ?";
-
-        if ($stmt = mysqli_prepare($link, $sql)) {
-            // Bind variables to the prepared statement as parameters
-            mysqli_stmt_bind_param($stmt, "s", $param_useremail);
-
-            // Set parameters
-            $param_useremail = trim($_POST["useremail"]);
-
-            // Attempt to execute the prepared statement
-            if (mysqli_stmt_execute($stmt)) {
-                /* store result */
-                mysqli_stmt_store_result($stmt);
-
-                if (mysqli_stmt_num_rows($stmt) == 1) {
-                    $useremail_err = "This useremail is already taken.";
-                } else {
-                    $useremail = trim($_POST["useremail"]);
-                }
-            } else {
-                echo "Oops! Something went wrong. Please try again later.";
-            }
-
-            // Close statement
-            mysqli_stmt_close($stmt);
-            
-        }
+        $nombre = sanitizeInput($_POST["nombre"]);
     }
 
-    // Validate username
-    if (empty(trim($_POST["username"]))) {
-        $username_err = "Please enter a username.";
+    // Validate email
+    if (empty(trim($_POST["email"]))) {
+        $email_err = "Por favor ingresa tu email.";
+    } elseif (!validateEmail($_POST["email"])) {
+        $email_err = "Formato de email inválido";
     } else {
-        $username = trim($_POST["username"]);
+        $email = trim($_POST["email"]);
     }
 
     // Validate password
     if (empty(trim($_POST["password"]))) {
-        $password_err = "Please enter a password.";
-    } elseif (strlen(trim($_POST["password"])) < 8) {
-        $password_err = "Password must have atleast 8 characters.";
+        $password_err = "Por favor ingresa una contraseña.";
+    } elseif (!validatePassword($_POST["password"])) {
+        $password_err = "La contraseña debe tener al menos 6 caracteres.";
     } else {
         $password = trim($_POST["password"]);
     }
 
     // Validate confirm password
-    // if (empty(trim($_POST["confirm_password"]))) {
-    //     $confirm_password_err = "Please enter a confirm password.";
-    // } else {
-    //     $confirm_password = trim($_POST["confirm_password"]);
-    //     if (empty($password_err) && ($password != $confirm_password)) {
-    //         $confirm_password_err = "Password did not match.";
-    //     }
-    // }
-
-    // Check input errors before inserting in database
-    if (empty($useremail_err) && empty($username_err) && empty($password_err) && empty($confirm_password_err)) {
-
-        // Prepare an insert statement
-        $sql = "INSERT INTO users (useremail, username, password, token) VALUES (?, ?, ?, ?)";
-
-        if ($stmt = mysqli_prepare($link, $sql)) {
-            // Bind variables to the prepared statement as parameters
-            mysqli_stmt_bind_param($stmt, "ssss", $param_useremail, $param_username, $param_password, $param_token);
-
-            // Set parameters
-            $param_useremail = $useremail;
-            $param_username = $username;
-            $param_password = password_hash($password, PASSWORD_DEFAULT); // Creates a password hash
-            $param_token = bin2hex(random_bytes(50)); // generate unique token
-
-            // Attempt to execute the prepared statement
-            if (mysqli_stmt_execute($stmt)) {
-                // Redirect to login page
-                header("location: index.php");
-            } else {
-                echo "Something went wrong. Please try again later.";
-            }
-
-            // Close statement
-            mysqli_stmt_close($stmt);
+    if (empty(trim($_POST["confirm_password"]))) {
+        $confirm_password_err = "Por favor confirma tu contraseña.";
+    } else {
+        $confirm_password = trim($_POST["confirm_password"]);
+        if (empty($password_err) && ($password != $confirm_password)) {
+            $confirm_password_err = "Las contraseñas no coinciden.";
         }
     }
 
-    // Close connection
-    mysqli_close($link);
+    // Optional fields
+    $telefono = !empty($_POST["telefono"]) ? sanitizeInput($_POST["telefono"]) : null;
+    $fecha_nacimiento = !empty($_POST["fecha_nacimiento"]) ? $_POST["fecha_nacimiento"] : null;
+
+    // Check input errors before inserting in database
+    if (empty($nombre_err) && empty($email_err) && empty($password_err) && empty($confirm_password_err)) {
+        $result = registerUser($nombre, $email, $password, $telefono, $fecha_nacimiento);
+        
+        if ($result['success']) {
+            $register_message = "¡Registro exitoso! Ahora puedes iniciar sesión.";
+            // Clear form
+            $nombre = $email = $password = $confirm_password = $telefono = $fecha_nacimiento = "";
+        } else {
+            $register_message = $result['message'];
+        }
+    }
 }
 ?>
 <?php include 'layouts/head-main.php'; ?>
 
     <head>
         
-        <title>Sign Up | Velzon - Admin & Dashboard Template</title>
+        <title>Registro | FIME - Gestión de Gastos Personales</title>
         <?php include 'layouts/title-meta.php'; ?>
 
         <?php include 'layouts/head-css.php'; ?>
@@ -140,7 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <img src="assets/images/logo-light.png" alt="" height="20">
                                     </a>
                                 </div>
-                                <p class="mt-3 fs-15 fw-medium">Premium Admin & Dashboard Template</p>
+                                <p class="mt-3 fs-15 fw-medium">Sistema de Gestión de Gastos Personales</p>
                             </div>
                         </div>
                     </div>
@@ -152,67 +118,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             
                                 <div class="card-body p-4"> 
                                     <div class="text-center mt-2">
-                                        <h5 class="text-primary">Create New Account</h5>
-                                        <p class="text-muted">Get your free velzon account now</p>
+                                        <h5 class="text-primary">Crear Nueva Cuenta</h5>
+                                        <p class="text-muted">Obtén tu cuenta gratuita de gestión de gastos</p>
                                     </div>
                                     <div class="p-2 mt-4">
                                         <form class="needs-validation" novalidate action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
             
-                                            <div class="mb-3" <?= !empty($useremail_err) ? 'has-error' : ''; ?>>
-                                                <label for="useremail" class="form-label">Email <span class="text-danger">*</span></label>
-                                                <input type="email" class="form-control" name="useremail" value="<?=$useremail?>" id="useremail" placeholder="Enter email address" required>  
-                                                <span class="text-danger"><?=$useremail_err?></span>
+                                            <?php if (!empty($register_message)): ?>
+                                                <div class="alert <?php echo strpos($register_message, 'exitoso') !== false ? 'alert-success' : 'alert-danger'; ?>" role="alert">
+                                                    <?php echo $register_message; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            
+                                            <div class="mb-3 <?php echo (!empty($nombre_err)) ? 'has-error' : ''; ?>">
+                                                <label for="nombre" class="form-label">Nombre Completo <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control" name="nombre" value="<?php echo $nombre; ?>" id="nombre" placeholder="Ingresa tu nombre completo" required>
+                                                <span class="text-danger"><?php echo $nombre_err; ?></span>
                                                 <div class="invalid-feedback">
-                                                    Please enter email
-                                                </div>      
-                                            </div>
-                                            <div class="mb-3" <?= !empty($useremail_err) ? 'has-error' : ''; ?>>
-                                                <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
-                                                <input type="text" class="form-control" name="username" value="<?=$username?>" id="username" placeholder="Enter username" required>
-                                                <span class="text-danger"><?=$username_err?></span>
-                                                <div class="invalid-feedback">
-                                                    Please enter username
+                                                    Por favor ingresa tu nombre
                                                 </div>
                                             </div>
 
-                                            <div class="mb-3 <?= !empty($password_err) ? 'has-error' : ''; ?>">
-                                                <label class="form-label" for="password-input">Password</label>
+                                            <div class="mb-3 <?php echo (!empty($email_err)) ? 'has-error' : ''; ?>">
+                                                <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                                                <input type="email" class="form-control" name="email" value="<?php echo $email; ?>" id="email" placeholder="Ingresa tu email" required>
+                                                <span class="text-danger"><?php echo $email_err; ?></span>
+                                                <div class="invalid-feedback">
+                                                    Por favor ingresa un email válido
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="telefono" class="form-label">Teléfono</label>
+                                                <input type="tel" class="form-control" name="telefono" value="<?php echo $telefono; ?>" id="telefono" placeholder="Ingresa tu teléfono (opcional)">
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento</label>
+                                                <input type="date" class="form-control" name="fecha_nacimiento" value="<?php echo $fecha_nacimiento; ?>" id="fecha_nacimiento">
+                                            </div>
+
+                                            <div class="mb-3 <?php echo (!empty($password_err)) ? 'has-error' : ''; ?>">
+                                                <label class="form-label" for="password-input">Contraseña <span class="text-danger">*</span></label>
                                                 <div class="position-relative auth-pass-inputgroup">
-                                                    <input type="password" class="form-control pe-5 password-input" name="password" value="<?=$password?>" onpaste="return false" placeholder="Enter password" id="password-input" aria-describedby="passwordInput" pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}" required>
+                                                    <input type="password" class="form-control pe-5 password-input" name="password" value="<?php echo $password; ?>" placeholder="Ingresa tu contraseña" id="password-input" required>
                                                     <button class="btn btn-link position-absolute end-0 top-0 text-decoration-none text-muted password-addon" type="button" id="password-addon"><i class="ri-eye-fill align-middle"></i></button>
-                                                    <div class="invalid-feedback">
-                                                        Please enter password
-                                                    </div>
+                                                    <span class="text-danger"><?php echo $password_err; ?></span>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3 <?php echo (!empty($confirm_password_err)) ? 'has-error' : ''; ?>">
+                                                <label class="form-label" for="confirm-password-input">Confirmar Contraseña <span class="text-danger">*</span></label>
+                                                <div class="position-relative auth-pass-inputgroup">
+                                                    <input type="password" class="form-control pe-5 password-input" name="confirm_password" value="<?php echo $confirm_password; ?>" placeholder="Confirma tu contraseña" id="confirm-password-input" required>
+                                                    <button class="btn btn-link position-absolute end-0 top-0 text-decoration-none text-muted password-addon" type="button" id="confirm-password-addon"><i class="ri-eye-fill align-middle"></i></button>
+                                                    <span class="text-danger"><?php echo $confirm_password_err; ?></span>
                                                 </div>
                                             </div>
 
                                             <div class="mb-4">
-                                                <p class="mb-0 fs-12 text-muted fst-italic">By registering you agree to the Velzon <a href="#" class="text-primary text-decoration-underline fst-normal fw-medium">Terms of Use</a></p>
-                                            </div>
-
-                                            <div id="password-contain" class="p-3 bg-light mb-2 rounded">
-                                                <h5 class="fs-13">Password must contain:</h5>
-                                                <p id="pass-length" class="invalid fs-12 mb-2">Minimum <b>8 characters</b></p>
-                                                <p id="pass-lower" class="invalid fs-12 mb-2">At <b>lowercase</b> letter (a-z)</p>
-                                                <p id="pass-upper" class="invalid fs-12 mb-2">At least <b>uppercase</b> letter (A-Z)</p>
-                                                <p id="pass-number" class="invalid fs-12 mb-0">A least <b>number</b> (0-9)</p>
+                                                <p class="mb-0 fs-12 text-muted fst-italic">Al registrarte aceptas los <a href="#" class="text-primary text-decoration-underline fst-normal fw-medium">Términos de Uso</a> del sistema</p>
                                             </div>
 
                                             <div class="mt-4">
-                                                <button class="btn btn-success w-100" type="submit">Sign Up</button>
-                                            </div>
-
-                                            <div class="mt-4 text-center">
-                                                <div class="signin-other-title">
-                                                    <h5 class="fs-13 mb-4 title text-muted">Create account with</h5>
-                                                </div>
-
-                                                <div>
-                                                    <button type="button" class="btn btn-primary btn-icon waves-effect waves-light"><i class="ri-facebook-fill fs-16"></i></button>
-                                                    <button type="button" class="btn btn-danger btn-icon waves-effect waves-light"><i class="ri-google-fill fs-16"></i></button>
-                                                    <button type="button" class="btn btn-dark btn-icon waves-effect waves-light"><i class="ri-github-fill fs-16"></i></button>
-                                                    <button type="button" class="btn btn-info btn-icon waves-effect waves-light"><i class="ri-twitter-fill fs-16"></i></button>
-                                                </div>
+                                                <button class="btn btn-success w-100" type="submit">Registrarse</button>
                                             </div>
                                         </form>
 
@@ -223,7 +192,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <!-- end card -->
 
                             <div class="mt-4 text-center">
-                                <p class="mb-0">Already have an account ? <a href="auth-signin-basic.php" class="fw-semibold text-primary text-decoration-underline"> Signin </a> </p>
+                                <p class="mb-0">¿Ya tienes una cuenta? <a href="auth-signin-basic.php" class="fw-semibold text-primary text-decoration-underline"> Iniciar Sesión </a> </p>
                             </div>
 
                         </div>

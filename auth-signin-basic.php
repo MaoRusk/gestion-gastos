@@ -2,88 +2,53 @@
 // Initialize the session
 session_start();
 
-// Check if the user is already logged in, if yes then redirect him to index page
-if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true) {
-    header("location: index.php");
+// Include config file and auth functions
+require_once "layouts/config.php";
+require_once "includes/auth_functions.php";
+
+// Check if the user is already logged in, if yes then redirect him to dashboard
+if (isLoggedIn()) {
+    header("location: dashboard-gastos.php");
     exit;
 }
-// Include config file
-require_once "layouts/config.php";
 
 // Define variables and initialize with empty values
-$username = $password = "";
-$username_err = $password_err = "";
+$email = $password = "";
+$email_err = $password_err = "";
+$login_message = "";
 
 // Processing form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
-    // Check if username is empty
-    if (empty(trim($_POST["username"]))) {
-        $username_err = "Please enter username.";
+    // Check if email is empty
+    if (empty(trim($_POST["email"]))) {
+        $email_err = "Por favor ingresa tu email.";
     } else {
-        $username = trim($_POST["username"]);
+        $email = trim($_POST["email"]);
+        if (!validateEmail($email)) {
+            $email_err = "Por favor ingresa un email válido.";
+        }
     }
 
     // Check if password is empty
     if (empty(trim($_POST["password"]))) {
-        $password_err = "Please enter your password.";
+        $password_err = "Por favor ingresa tu contraseña.";
     } else {
         $password = trim($_POST["password"]);
     }
 
     // Validate credentials
-    if (empty($username_err) && empty($password_err)) {
-        // Prepare a select statement
-        $sql = "SELECT id, username, password FROM users WHERE username = ?";
-
-        if ($stmt = mysqli_prepare($link, $sql)) {
-            // Bind variables to the prepared statement as parameters
-            mysqli_stmt_bind_param($stmt, "s", $param_username);
-
-            // Set parameters
-            $param_username = $username;
-
-            // Attempt to execute the prepared statement
-            if (mysqli_stmt_execute($stmt)) {
-                // Store result
-                mysqli_stmt_store_result($stmt);
-
-                // Check if username exists, if yes then verify password
-                if (mysqli_stmt_num_rows($stmt) == 1) {
-                    // Bind result variables
-                    mysqli_stmt_bind_result($stmt, $id, $username, $hashed_password);
-                    if (mysqli_stmt_fetch($stmt)) {
-                        if (password_verify($password, $hashed_password)) {
-                            // Password is correct, so start a new session
-                            session_start();
-
-                            // Store data in session variables
-                            $_SESSION["loggedin"] = true;
-                            $_SESSION["id"] = $id;
-                            $_SESSION["username"] = $username;
-
-                            // Redirect user to welcome page
-                            header("location: index.php");
-                        } else {
-                            // Display an error message if password is not valid
-                            $password_err = "The password you entered was not valid.";
-                        }
-                    }
-                } else {
-                    // Display an error message if username doesn't exist
-                    $username_err = "No account found with that username.";
-                }
-            } else {
-                echo "Oops! Something went wrong. Please try again later.";
-            }
-
-            // Close statement
-            mysqli_stmt_close($stmt);
+    if (empty($email_err) && empty($password_err)) {
+        $result = loginUser($email, $password);
+        
+        if ($result['success']) {
+            // Redirect to dashboard
+            header("location: dashboard-gastos.php");
+            exit;
+        } else {
+            $login_message = $result['message'];
         }
     }
-
-    // Close connection
-    mysqli_close($link);
 }
 
 ?>
@@ -91,7 +56,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     <head>
         
-        <title>Sign In | Velzon - Admin & Dashboard Template</title>
+        <title>Iniciar Sesión | FIME - Gestión de Gastos Personales</title>
         <?php include 'layouts/title-meta.php'; ?>
 
         <?php include 'layouts/head-css.php'; ?>
@@ -123,7 +88,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <img src="assets/images/logo-light.png" alt="" height="20">
                                     </a>
                                 </div>
-                                <p class="mt-3 fs-15 fw-medium">Premium Admin & Dashboard Template</p>
+                                <p class="mt-3 fs-15 fw-medium">Sistema de Gestión de Gastos Personales</p>
                             </div>
                         </div>
                     </div>
@@ -135,25 +100,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             
                                 <div class="card-body p-4"> 
                                     <div class="text-center mt-2">
-                                        <h5 class="text-primary">Welcome Back !</h5>
-                                        <p class="text-muted">Sign in to continue to Velzon.</p>
+                                        <h5 class="text-primary">¡Bienvenido de vuelta!</h5>
+                                        <p class="text-muted">Inicia sesión para continuar a tu panel de gastos.</p>
                                     </div>
                                     <div class="p-2 mt-4">
                                         <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
             
-                                            <div class="mb-3 <?php echo (!empty($username_err)) ? 'has-error' : ''; ?>">
-                                                <label for="username" class="form-label">Username</label>
-                                                <input type="text" class="form-control" value="Anna" name="username" id="username" placeholder="Enter username">
-                                                <span class="text-danger"><?php echo $username_err; ?></span>
+                                            <?php if (!empty($login_message)): ?>
+                                                <div class="alert alert-danger" role="alert">
+                                                    <?php echo $login_message; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            
+                                            <div class="mb-3 <?php echo (!empty($email_err)) ? 'has-error' : ''; ?>">
+                                                <label for="email" class="form-label">Email</label>
+                                                <input type="email" class="form-control" value="<?php echo $email; ?>" name="email" id="email" placeholder="Ingresa tu email">
+                                                <span class="text-danger"><?php echo $email_err; ?></span>
                                             </div>
                     
                                             <div class="mb-3 <?php echo (!empty($password_err)) ? 'has-error' : ''; ?>">
                                                 <div class="float-end">
-                                                    <a href="auth-pass-reset-basic.php" class="text-muted">Forgot password?</a>
+                                                    <a href="auth-pass-reset-basic.php" class="text-muted">¿Olvidaste tu contraseña?</a>
                                                 </div>
-                                                <label class="form-label" for="password-input">Password</label>
+                                                <label class="form-label" for="password-input">Contraseña</label>
                                                 <div class="position-relative auth-pass-inputgroup mb-3">
-                                                    <input type="password" class="form-control pe-5 password-input" value="123456" name="password" placeholder="Enter password" id="password-input">
+                                                    <input type="password" class="form-control pe-5 password-input" name="password" placeholder="Ingresa tu contraseña" id="password-input">
                                                     <span class="text-danger"><?php echo $password_err; ?></span>
                                                     <button class="btn btn-link position-absolute end-0 top-0 text-decoration-none text-muted password-addon" type="button" id="password-addon"><i class="ri-eye-fill align-middle"></i></button>
                                                 </div>
@@ -161,24 +132,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" value="" id="auth-remember-check">
-                                                <label class="form-check-label" for="auth-remember-check">Remember me</label>
+                                                <label class="form-check-label" for="auth-remember-check">Recordarme</label>
                                             </div>
                                             
                                             <div class="mt-4">
-                                                <button class="btn btn-success w-100" type="submit">Sign In</button>
+                                                <button class="btn btn-success w-100" type="submit">Iniciar Sesión</button>
                                             </div>
 
-                                            <div class="mt-4 text-center">
-                                                <div class="signin-other-title">
-                                                    <h5 class="fs-13 mb-4 title">Sign In with</h5>
-                                                </div>
-                                                <div>
-                                                    <button type="button" class="btn btn-primary btn-icon waves-effect waves-light"><i class="ri-facebook-fill fs-16"></i></button>
-                                                    <button type="button" class="btn btn-danger btn-icon waves-effect waves-light"><i class="ri-google-fill fs-16"></i></button>
-                                                    <button type="button" class="btn btn-dark btn-icon waves-effect waves-light"><i class="ri-github-fill fs-16"></i></button>
-                                                    <button type="button" class="btn btn-info btn-icon waves-effect waves-light"><i class="ri-twitter-fill fs-16"></i></button>
-                                                </div>
-                                            </div>
                                         </form>
                                     </div>
                                 </div>
@@ -187,7 +147,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <!-- end card -->
 
                             <div class="mt-4 text-center">
-                                <p class="mb-0">Don't have an account ? <a href="auth-signup-basic.php" class="fw-semibold text-primary text-decoration-underline"> Signup </a> </p>
+                                <p class="mb-0">¿No tienes una cuenta? <a href="auth-signup-basic.php" class="fw-semibold text-primary text-decoration-underline"> Regístrate </a> </p>
                             </div>
 
                         </div>

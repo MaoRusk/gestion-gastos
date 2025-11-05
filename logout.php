@@ -1,14 +1,15 @@
 <?php
-// Initialize the session
-session_start();
+/**
+ * Página de logout para el sistema de gastos personales
+ */
 
-// Unset all of the session variables
-$_SESSION = array();
+// Incluir funciones de autenticación
+require_once "includes/auth_functions.php";
 
-// Destroy the session.
-session_destroy();
+// Cerrar sesión
+logoutUser();
 
-// Redirect to login page
+// Redirigir al login
 header("location: auth-signin-basic.php");
 exit;
 ?>
