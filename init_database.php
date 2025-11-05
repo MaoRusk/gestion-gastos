@@ -38,6 +38,27 @@ if (!isset($link)) {
 
 echo "<p class='info'>ℹ️ Tipo de base de datos: " . (isset($link->type) ? $link->type : 'mysql') . "</p>";
 
+// Mostrar información de conexión
+echo "<p class='info'>🔌 Conectado a: <strong>" . htmlspecialchars(DB_SERVER) . ":" . (defined('DB_PORT') ? DB_PORT : '5432') . "/" . htmlspecialchars(DB_NAME) . "</strong></p>";
+
+// Verificar conexión actual
+try {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->query("SELECT current_database()");
+        $current_db = $stmt->fetchColumn();
+        echo "<p class='info'>📊 Base de datos actual: <strong>" . htmlspecialchars($current_db) . "</strong></p>";
+        
+        // Listar tablas existentes antes de crear
+        if (isset($link->type) && $link->type === 'postgresql') {
+            $stmt = $link->pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'");
+            $table_count = $stmt->fetchColumn();
+            echo "<p class='info'>📋 Tablas existentes antes de la inicialización: <strong>$table_count</strong></p>";
+        }
+    }
+} catch (Exception $e) {
+    echo "<p class='warning'>⚠️ No se pudo verificar la base de datos actual: " . htmlspecialchars($e->getMessage()) . "</p>";
+}
+
 // Leer el esquema SQL - Priorizar el archivo completo de MySQL/MariaDB
 $schema_file = null;
 if (file_exists('database_completo_mariaDB.sql')) {
@@ -178,13 +199,36 @@ echo "<h2>📊 Resumen</h2>";
 echo "<p class='success'>✅ Comandos ejecutados exitosamente: <strong>$success_count</strong></p>";
 echo "<p class='error'>⚠️ Errores encontrados: <strong>$error_count</strong></p>";
 
+// Verificar tablas creadas después de la ejecución
+echo "<h3>📋 Verificación Post-Inicialización:</h3>";
+try {
+    if (isset($link->pdo)) {
+        if (isset($link->type) && $link->type === 'postgresql') {
+            $stmt = $link->pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
+            $created_tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            echo "<p class='info'>Tablas encontradas después de la inicialización (" . count($created_tables) . "):</p>";
+            if (!empty($created_tables)) {
+                echo "<ul>";
+                foreach ($created_tables as $table) {
+                    echo "<li>" . htmlspecialchars($table) . "</li>";
+                }
+                echo "</ul>";
+            }
+        }
+    }
+} catch (Exception $e) {
+    echo "<p class='warning'>⚠️ No se pudieron listar las tablas: " . htmlspecialchars($e->getMessage()) . "</p>";
+}
+
 if ($error_count == 0 || (count($errors) > 0 && 
     (strpos(implode(' ', $errors), 'already exists') !== false || 
      strpos(implode(' ', $errors), 'Duplicate') !== false))) {
     echo "<p class='success'><strong>🎉 ¡Base de datos configurada completamente!</strong></p>";
     echo "<p>Puedes acceder al sistema en: <a href='index.php'>Iniciar Sesión</a></p>";
+    echo "<p>O verifica el estado en: <a href='verify_database.php'>Verificar Base de Datos</a></p>";
 } else {
     echo "<p class='error'>Por favor, revisa los errores anteriores.</p>";
+    echo "<p>Verifica el estado en: <a href='verify_database.php'>Verificar Base de Datos</a></p>";
 }
 ?>
 

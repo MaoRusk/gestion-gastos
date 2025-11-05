@@ -38,6 +38,31 @@ if (!isset($link)) {
 
 echo "<p class='info'>ℹ️ Tipo de base de datos: <strong>" . (isset($link->type) ? $link->type : 'mysql') . "</strong></p>";
 
+// Mostrar información de conexión actual
+echo "<h2>🔌 Información de Conexión</h2>";
+echo "<table>";
+echo "<tr><th>Parámetro</th><th>Valor</th></tr>";
+echo "<tr><td>Host</td><td>" . htmlspecialchars(DB_SERVER) . "</td></tr>";
+echo "<tr><td>Puerto</td><td>" . (defined('DB_PORT') ? htmlspecialchars(DB_PORT) : 'No definido') . "</td></tr>";
+echo "<tr><td>Usuario</td><td>" . htmlspecialchars(DB_USERNAME) . "</td></tr>";
+echo "<tr><td>Base de Datos</td><td>" . htmlspecialchars(DB_NAME) . "</td></tr>";
+echo "<tr><td>Tipo</td><td>" . htmlspecialchars(DB_TYPE) . "</td></tr>";
+echo "</table>";
+
+// Verificar conexión actual
+echo "<h2>🔍 Estado de Conexión</h2>";
+try {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->query("SELECT current_database()");
+        $current_db = $stmt->fetchColumn();
+        echo "<p class='success'>✅ Conectado a la base de datos: <strong>" . htmlspecialchars($current_db) . "</strong></p>";
+    } else {
+        echo "<p class='info'>ℹ️ Usando mysqli</p>";
+    }
+} catch (Exception $e) {
+    echo "<p class='error'>❌ Error verificando conexión: " . htmlspecialchars($e->getMessage()) . "</p>";
+}
+
 // Verificar variables de entorno
 echo "<h2>📋 Variables de Entorno</h2>";
 echo "<table>";
@@ -52,8 +77,48 @@ echo "</table>";
 
 // Verificar tablas
 echo "<h2>📊 Verificación de Tablas</h2>";
+
+// Primero, listar todas las tablas que existen
+echo "<h3>Tablas Existentes en la Base de Datos:</h3>";
+try {
+    if (isset($link->pdo)) {
+        // PostgreSQL
+        if (isset($link->type) && $link->type === 'postgresql') {
+            $stmt = $link->pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
+            $all_tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            // MySQL/SQLite
+            $stmt = $link->pdo->query("SHOW TABLES");
+            $all_tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        }
+    } else {
+        // MySQL con mysqli
+        $result = mysqli_query($link, "SHOW TABLES");
+        $all_tables = [];
+        while ($row = mysqli_fetch_array($result)) {
+            $all_tables[] = $row[0];
+        }
+    }
+    
+    if (empty($all_tables)) {
+        echo "<p class='error'>❌ No se encontraron tablas en la base de datos.</p>";
+    } else {
+        echo "<p class='info'>Tablas encontradas (" . count($all_tables) . "):</p>";
+        echo "<ul>";
+        foreach ($all_tables as $table) {
+            echo "<li>" . htmlspecialchars($table) . "</li>";
+        }
+        echo "</ul>";
+    }
+} catch (Exception $e) {
+    echo "<p class='error'>❌ Error listando tablas: " . htmlspecialchars($e->getMessage()) . "</p>";
+    $all_tables = [];
+}
+
+// Verificar tablas requeridas
 $required_tables = ['usuarios', 'cuentas_bancarias', 'categorias', 'transacciones', 'transferencias', 'presupuestos'];
 
+echo "<h3>Verificación de Tablas Requeridas:</h3>";
 $tables_exist = [];
 $all_exist = true;
 
@@ -61,11 +126,20 @@ foreach ($required_tables as $table) {
     try {
         if (isset($link->pdo)) {
             // Usando PDO
-            $stmt = $link->pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '$table'");
+            if (isset($link->type) && $link->type === 'postgresql') {
+                $stmt = $link->pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?");
+                $stmt->execute([$table]);
+            } else {
+                $stmt = $link->pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?");
+                $stmt->execute([$table]);
+            }
             $exists = $stmt->fetchColumn() > 0;
         } else {
             // Usando mysqli
-            $result = mysqli_query($link, "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_name = '$table'");
+            $stmt = mysqli_prepare($link, "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_name = ?");
+            mysqli_stmt_bind_param($stmt, "s", $table);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
             $row = mysqli_fetch_assoc($result);
             $exists = $row['count'] > 0;
         }
