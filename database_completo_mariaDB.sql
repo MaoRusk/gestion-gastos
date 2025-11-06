@@ -5,7 +5,7 @@
 -- Este script crea TODAS las tablas y las llena con datos reales
 -- ============================================================================
 
-USE fime_gastos;
+USE fime_gastos_db;
 
 -- ============================================================================
 -- 1. CREAR TABLA: usuarios

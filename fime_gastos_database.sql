@@ -4,8 +4,8 @@
 -- =====================================================
 
 -- Crear base de datos (solo para MySQL)
--- CREATE DATABASE IF NOT EXISTS fime_gastos;
--- USE fime_gastos;
+-- CREATE DATABASE IF NOT EXISTS fime_gastos_db;
+-- USE fime_gastos_db;
 
 -- =====================================================
 -- TABLA: usuarios

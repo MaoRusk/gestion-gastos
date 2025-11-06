@@ -8,28 +8,28 @@
 require_once "layouts/config.php";
 
 // Verificar si la base de datos existe
-$check_db = "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'fime_gastos'";
+$check_db = "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'fime_gastos_db'";
 $result = mysqli_query($link, $check_db);
 
 if (mysqli_num_rows($result) == 0) {
     // Crear la base de datos
-    $create_db = "CREATE DATABASE fime_gastos CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+    $create_db = "CREATE DATABASE fime_gastos_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
     if (mysqli_query($link, $create_db)) {
-        echo "✅ Base de datos 'fime_gastos' creada exitosamente.<br>";
+        echo "✅ Base de datos 'fime_gastos_db' creada exitosamente.<br>";
     } else {
         echo "❌ Error creando la base de datos: " . mysqli_error($link) . "<br>";
         exit;
     }
 } else {
-    echo "ℹ️ La base de datos 'fime_gastos' ya existe.<br>";
+    echo "ℹ️ La base de datos 'fime_gastos_db' ya existe.<br>";
 }
 
 // Reconectar a la nueva base de datos
 mysqli_close($link);
-$link = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, 'fime_gastos');
+$link = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, 'fime_gastos_db');
 
 if ($link === false) {
-    die("ERROR: Could not connect to fime_gastos database. " . mysqli_connect_error());
+    die("ERROR: Could not connect to fime_gastos_db database. " . mysqli_connect_error());
 }
 
 // Leer y ejecutar el esquema SQL

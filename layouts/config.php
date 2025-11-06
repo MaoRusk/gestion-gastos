@@ -1,13 +1,53 @@
 <?php
 /* Database configuration - Using environment variables for production */
 // Use environment variables if available (for Render.com), otherwise use defaults for local development
+// Start with individual env vars / defaults
 define('DB_TYPE', getenv('DB_TYPE') ?: 'postgresql'); // 'mysql', 'postgresql', or 'sqlite'
 define('DB_SERVER', getenv('DB_HOST') ?: 'localhost');
 define('DB_USERNAME', getenv('DB_USER') ?: 'root');
-define('DB_PASSWORD', getenv('DB_PASSWORD') ?: '');
-define('DB_NAME', getenv('DB_NAME') ?: 'fime_gastos');
+// Default local PostgreSQL password for development. Change or set env var DB_PASSWORD in production.
+define('DB_PASSWORD', getenv('DB_PASSWORD') ?: '1234');
+define('DB_NAME', getenv('DB_NAME') ?: 'fime_gastos_db');
 define('DB_PORT', getenv('DB_PORT') ?: '5432'); // PostgreSQL default port
-define('DB_FILE', 'database/fime_gastos.db');
+
+// If a DATABASE_URL is provided (e.g. Render/Heroku), parse it and override the above values.
+// Expected format: postgres://user:pass@host:port/dbname or mysql://... or sqlite:///path
+$database_url = getenv('DATABASE_URL') ?: getenv('DATABASE_URL_STRING') ?: false;
+if ($database_url) {
+    $parts = parse_url($database_url);
+    if ($parts !== false) {
+        if (isset($parts['scheme'])) {
+            $scheme = strtolower($parts['scheme']);
+            if (in_array($scheme, ['postgres', 'postgresql'])) {
+                define('DB_TYPE', 'postgresql');
+            } elseif (in_array($scheme, ['mysql'])) {
+                define('DB_TYPE', 'mysql');
+            } elseif ($scheme === 'sqlite') {
+                define('DB_TYPE', 'sqlite');
+            }
+        }
+        if (isset($parts['host'])) {
+            define('DB_SERVER', $parts['host']);
+        }
+        if (isset($parts['port'])) {
+            define('DB_PORT', $parts['port']);
+        }
+        if (isset($parts['user'])) {
+            define('DB_USERNAME', $parts['user']);
+        }
+        if (isset($parts['pass'])) {
+            define('DB_PASSWORD', $parts['pass']);
+        }
+        if (isset($parts['path'])) {
+            // path starts with '/', remove it
+            $db = ltrim($parts['path'], '/');
+            if ($db !== '') {
+                define('DB_NAME', $db);
+            }
+        }
+    }
+}
+define('DB_FILE', 'database/fime_gastos_db.db');
 
 // Create database directory if it doesn't exist
 if (!file_exists('database')) {

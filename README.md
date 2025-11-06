@@ -185,9 +185,52 @@ sistema-gastos-fime/
 // layouts/config.php
 define('DB_SERVER', 'localhost');
 define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'sistema_gastos_fime');
+define('DB_PASSWORD', '1234');
+define('DB_NAME', 'fime_gastos_db');
 ```
+
+### Conexión PostgreSQL (configuración local)
+
+Si quieres ejecutar el proyecto con PostgreSQL en desarrollo local, sigue estos pasos rápidos:
+
+1. Instala PostgreSQL y la extensión PHP para PostgreSQL (ajusta la versión de PHP si es necesario):
+
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo apt install php-pgsql    # o php8.1-pgsql / php8.2-pgsql según tu versión
+```
+
+2. Crear el usuario y la base de datos (ejecuta como usuario del sistema `postgres`):
+
+```bash
+# Crear usuario 'root' con contraseña '1234'
+sudo -u postgres psql -c "CREATE USER root WITH PASSWORD '1234';"
+
+# Crear la base de datos 'fime_gastos_db' y asignarla a root
+sudo -u postgres psql -c "CREATE DATABASE fime_gastos_db OWNER root;"
+```
+
+3. Configura las variables de entorno o edita `layouts/config.php` para usar PostgreSQL:
+
+```bash
+export DB_TYPE=postgresql
+export DB_HOST=localhost
+export DB_USER=root
+export DB_PASSWORD=1234
+export DB_NAME=fime_gastos_db
+export DB_PORT=5432
+```
+
+El archivo `layouts/config.php` prioriza las variables de entorno. Para desarrollo local el proyecto viene con la contraseña por defecto `1234` si no se define `DB_PASSWORD` en el entorno.
+
+4. Probar la conexión (opcional): existe un script de prueba `test_db_connection.php` en la raíz del proyecto que intenta conectarse usando la configuración del proyecto y muestra si la conexión fue exitosa.
+
+```bash
+php test_db_connection.php
+```
+
+Notas de seguridad: no dejes credenciales en claro en producción — utiliza un gestor de secretos o variables de entorno seguras.
 
 ### Usuario Administrador
 - Email: `admin@fime.com`

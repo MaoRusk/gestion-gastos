@@ -67,7 +67,9 @@ $transacciones = mysqli_fetch_all($result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
 // Get categories for filter
-$sql_categories = "SELECT id, nombre, tipo FROM categorias WHERE (usuario_id = ? OR es_predefinida = 1) AND activa = 1 ORDER BY tipo, nombre";
+$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
+$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
+$sql_categories = "SELECT id, nombre, tipo FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition . " ORDER BY tipo, nombre";
 $stmt = mysqli_prepare($link, $sql_categories);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);

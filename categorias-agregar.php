@@ -54,7 +54,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $user_id = getCurrentUserId();
         
         // Prepare an insert statement
-        $sql = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, descripcion, es_predefinida, activa) VALUES (?, ?, ?, ?, ?, ?, 0, 1)";
+        $sql = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, descripcion, es_predefinida, activa) VALUES (?, ?, ?, ?, ?, ?, false, true)";
         
         if ($stmt = mysqli_prepare($link, $sql)) {
             // Bind variables to the prepared statement as parameters

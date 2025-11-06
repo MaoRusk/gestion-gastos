@@ -16,10 +16,19 @@ $user_id = getCurrentUserId();
 $fecha_inicio = isset($_GET['fecha_inicio']) ? $_GET['fecha_inicio'] : date('Y-m-01');
 $fecha_fin = isset($_GET['fecha_fin']) ? $_GET['fecha_fin'] : date('Y-m-t');
 
-// Get monthly income and expenses for the last 6 months (portable for MySQL/SQLite)
+// Get monthly income and expenses for the last 6 months (portable for SQLite/MySQL/Postgres)
 $isSqlite = isset($link->type) && $link->type === 'sqlite';
+$isPostgres = defined('DB_TYPE') && DB_TYPE === 'postgresql';
 $six_months_ago = date('Y-m-d', strtotime($fecha_fin . ' -6 months'));
-$groupExpr = $isSqlite ? "strftime('%Y-%m', fecha)" : "DATE_FORMAT(fecha, '%Y-%m')";
+if ($isSqlite) {
+    $groupExpr = "strftime('%Y-%m', fecha)";
+} elseif ($isPostgres) {
+    // PostgreSQL: use to_char to format date to year-month
+    $groupExpr = "to_char(fecha, 'YYYY-MM')";
+} else {
+    // MySQL (default)
+    $groupExpr = "DATE_FORMAT(fecha, '%Y-%m')";
+}
 
 $sql_income = "SELECT " . $groupExpr . " as mes, SUM(monto) as total
                FROM transacciones 

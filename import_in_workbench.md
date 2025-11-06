@@ -14,15 +14,15 @@
 3. **Crear la base de datos**
    - En la consola SQL, ejecuta:
    ```sql
-   CREATE DATABASE IF NOT EXISTS fime_gastos;
-   USE fime_gastos;
+   CREATE DATABASE IF NOT EXISTS fime_gastos_db;
+   USE fime_gastos_db;
    ```
 
 4. **Importar el archivo**
    - Ve a `Server` → `Data Import`
    - Selecciona "Import from Self-Contained File"
    - Busca: `/home/market/Documents/FIME/PROYECTO INTEGRADOR II/PIA/fime_gastos_backup.sql`
-   - Selecciona "fime_gastos" como base de datos
+   - Selecciona "fime_gastos_db" como base de datos
    - Marca "Add DROP DATABASE / DROP TABLE"
    - Clic en "Start Import"
 
@@ -40,7 +40,7 @@ Si tienes problemas de permisos, crea un usuario:
 
 ```sql
 CREATE USER 'fime_user'@'localhost' IDENTIFIED BY 'fime_password';
-GRANT ALL PRIVILEGES ON fime_gastos.* TO 'fime_user'@'localhost';
+GRANT ALL PRIVILEGES ON fime_gastos_db.* TO 'fime_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -53,7 +53,7 @@ Luego usa estas credenciales:
 Ejecuta estas queries en Workbench:
 
 ```sql
-USE fime_gastos;
+USE fime_gastos_db;
 
 SELECT 'usuarios' as tabla, COUNT(*) as total FROM usuarios
 UNION ALL
@@ -86,8 +86,8 @@ Deberías ver:
 
 Si las tablas siguen vacías después de importar, verifica:
 
-1. ✅ ¿Se creó la base de datos `fime_gastos`?
-2. ✅ ¿Estás en el esquema correcto (fime_gastos)?
+1. ✅ ¿Se creó la base de datos `fime_gastos_db`?
+2. ✅ ¿Estás en el esquema correcto (fime_gastos_db)?
 3. ✅ ¿Hay errores en el log de importación?
 
 

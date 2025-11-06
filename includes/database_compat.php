@@ -165,10 +165,37 @@ if (isset($link) && isset($link->pdo)) {
     
     if (!function_exists('mysqli_query')) {
         function mysqli_query($link, $query) {
+            // For compatibility, execute the query and return an object with rows
             if (isset($link->pdo)) {
-                return $link->pdo->query($query);
+                try {
+                    $stmt = $link->pdo->query($query);
+                    if ($stmt instanceof PDOStatement) {
+                        $result = new stdClass();
+                        $result->stmt = $stmt;
+                        $result->rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        $result->current_row = 0;
+                        return $result;
+                    }
+                } catch (Exception $e) {
+                    return false;
+                }
             }
             return false;
+        }
+    }
+
+    if (!function_exists('mysqli_real_escape_string')) {
+        function mysqli_real_escape_string($link, $string) {
+            if (isset($link->pdo)) {
+                // PDO::quote adds surrounding quotes, strip them to mimic mysqli_real_escape_string
+                $q = $link->pdo->quote($string);
+                if ($q !== false && strlen($q) >= 2 && $q[0] === "'" && substr($q, -1) === "'") {
+                    return substr($q, 1, -1);
+                }
+                return $q !== false ? $q : $string;
+            }
+            // Fallback: simple addslashes
+            return addslashes($string);
         }
     }
     

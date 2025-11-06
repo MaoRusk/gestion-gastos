@@ -16,7 +16,7 @@ $success_message = "";
 
 // Get user's expense categories
 $user_id = getCurrentUserId();
-$sql_categories = "SELECT id, nombre, color, icono FROM categorias WHERE (usuario_id = ? OR es_predefinida = 1) AND activa = 1 AND tipo = 'gasto' ORDER BY nombre";
+$sql_categories = "SELECT id, nombre, color, icono FROM categorias WHERE (usuario_id = ? OR es_predefinida = TRUE) AND activa = TRUE AND tipo = 'gasto' ORDER BY nombre";
 $stmt = mysqli_prepare($link, $sql_categories);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);

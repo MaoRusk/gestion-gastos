@@ -6,7 +6,6 @@
 
 require_once "layouts/config.php";
 
-header('Content-Type: text/html; charset=utf-8');
 ?>
 <!DOCTYPE html>
 <html>
@@ -25,10 +24,8 @@ header('Content-Type: text/html; charset=utf-8');
         th { background-color: #f2f2f2; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>🔍 Verificación de Base de Datos</h1>
-        <hr>
+</body>
+</html>
 
 <?php
 // Verificar conexión
@@ -188,7 +185,7 @@ try {
 } catch (Exception $e) {
     echo "<p class='error'>❌ Error verificando usuario admin: " . htmlspecialchars($e->getMessage()) . "</p>";
     if (strpos($e->getMessage(), 'does not exist') !== false || strpos($e->getMessage(), 'relation') !== false) {
-        echo "<p class='warning'>⚠️ La tabla 'usuarios' no existe. Necesitas ejecutar <a href='init_database.php'>init_database.php</a> primero.</p>";
+        echo "<p class='warning'>⚠️ La tabla 'usuarios' no existe. Ejecuta '/init_database.php' desde el navegador o, si estás en el servidor, ejecuta: php migrate_database.php</p>";
     }
 }
 
@@ -198,7 +195,7 @@ echo "<h2>📋 Resumen</h2>";
 if ($all_exist) {
     echo "<p class='success'><strong>✅ Todas las tablas necesarias existen.</strong></p>";
 } else {
-    echo "<p class='error'><strong>❌ Faltan algunas tablas. Ejecuta <a href='init_database.php'>init_database.php</a>.</strong></p>";
+    echo "<p class='error'><strong>❌ Faltan algunas tablas. Ejecuta '/init_database.php' (web) o desde CLI: php migrate_database.php</strong></p>";
 }
 
 if (isset($admin) && $admin) {

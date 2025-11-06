@@ -37,7 +37,7 @@ git push origin main
 3. **Nota**: Si solo aparece PostgreSQL, puedes usar PostgreSQL cambiando la configuración, o crear un servicio MySQL externo
 4. Si MySQL está disponible:
    - **Name**: `fime-gastos-db`
-   - **Database**: `fime_gastos`
+   - **Database**: `fime_gastos_db`
    - **User**: `fime_gastos_user`
    - **Plan**: Selecciona **Free** (gratis)
    - Haz clic en **"Create Database"**
@@ -78,7 +78,7 @@ git push origin main
    DB_HOST=<tu-host-de-base-de-datos>
    DB_USER=<tu-usuario-de-base-de-datos>
    DB_PASSWORD=<tu-contraseña-de-base-de-datos>
-   DB_NAME=fime_gastos
+   DB_NAME=fime_gastos_db
    ```
 
    **Cómo obtener los valores**:
@@ -95,7 +95,7 @@ git push origin main
    DB_HOST=dpg-xxxxx-a.oregon-postgres.render.com
    DB_USER=fime_gastos_user
    DB_PASSWORD=tu_contraseña_aqui
-   DB_NAME=fime_gastos
+   DB_NAME=fime_gastos_db
    ```
 
 5. **Conectar la Base de Datos**:

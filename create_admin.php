@@ -20,10 +20,8 @@ header('Content-Type: text/html; charset=utf-8');
         .info { color: #17a2b8; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>👤 Crear Usuario Admin</h1>
-        <hr>
+</body>
+</html>
 
 <?php
 // Verificar conexión

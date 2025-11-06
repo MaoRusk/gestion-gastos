@@ -31,7 +31,7 @@ DB_TYPE=mysql
 DB_HOST=<tu-host-de-render>
 DB_USER=<tu-usuario>
 DB_PASSWORD=<tu-contraseña>
-DB_NAME=fime_gastos
+DB_NAME=fime_gastos_db
 ```
 
 ### 5️⃣ Inicializar Base de Datos

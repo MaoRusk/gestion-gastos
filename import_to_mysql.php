@@ -7,8 +7,8 @@
 // MySQL connection parameters
 $host = 'localhost';
 $username = 'root';
-$password = '';
-$database = 'fime_gastos';
+$password = '1234';
+$database = 'fime_gastos_db';
 
 echo "🔄 Connecting to MySQL...\n";
 

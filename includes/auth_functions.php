@@ -123,7 +123,9 @@ function registerUser($nombre, $email, $password, $telefono = null, $fecha_nacim
 function loginUser($email, $password) {
     global $link;
     
-    $sql = "SELECT id, nombre, email, password_hash FROM usuarios WHERE email = ? AND activo = 1";
+    // Use boolean TRUE for PostgreSQL, numeric 1 for MySQL/SQLite
+    $activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'activo = TRUE' : 'activo = 1';
+    $sql = "SELECT id, nombre, email, password_hash FROM usuarios WHERE email = ? AND " . $activeCondition;
     
     // Check if using PDO (PostgreSQL, SQLite, or MySQL via PDO)
     if (isset($link->pdo)) {
@@ -138,8 +140,8 @@ function loginUser($email, $password) {
                 strpos($e->getMessage(), 'Undefined table') !== false ||
                 strpos($e->getMessage(), 'relation') !== false) {
                 return [
-                    'success' => false, 
-                    'message' => 'La base de datos no está inicializada. Por favor ejecuta: /init_database.php',
+                    'success' => false,
+                    'message' => "La base de datos no está inicializada. Ejecuta '/init_database.php' desde el navegador o, si estás en la máquina de desarrollo, ejecuta: php migrate_database.php",
                     'needs_init' => true
                 ];
             }
@@ -243,6 +245,11 @@ function createUserCategories($user_id) {
  * Requerir autenticación - redirigir si no está logueado
  */
 function requireAuth() {
+    // Debug helper: if environment variable DEBUG_SKIP_AUTH=1 is set, skip redirect (useful for CLI/debugging)
+    if (getenv('DEBUG_SKIP_AUTH') === '1') {
+        return;
+    }
+
     if (!isLoggedIn()) {
         header("location: auth-signin-basic.php");
         exit;

@@ -12,8 +12,12 @@ requireAuth();
 // Get user's categories
 $user_id = getCurrentUserId();
 
-// Get categories
-$sql = "SELECT * FROM categorias WHERE (usuario_id = ? OR es_predefinida = 1) AND activa = 1 ORDER BY tipo, nombre";
+// Build DB-aware boolean conditions (Postgres uses TRUE/FALSE, MySQL uses 1/0)
+$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
+$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
+
+// Get categories: either owned by the user OR pre-defined, and active
+$sql = "SELECT * FROM categorias c WHERE (c.usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition . " ORDER BY tipo, nombre";
 $stmt = mysqli_prepare($link, $sql);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);

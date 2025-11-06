@@ -18,7 +18,8 @@ $success_message = "";
 $user_id = getCurrentUserId();
 
 // Get accounts
-$sql_accounts = "SELECT id, nombre, tipo, balance_actual FROM cuentas_bancarias WHERE usuario_id = ? AND activa = 1 ORDER BY nombre";
+$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'cb.activa = TRUE' : 'cb.activa = 1';
+$sql_accounts = "SELECT id, nombre, tipo, balance_actual FROM cuentas_bancarias cb WHERE usuario_id = ? AND " . $activeCondition . " ORDER BY nombre";
 $stmt = mysqli_prepare($link, $sql_accounts);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -27,7 +28,9 @@ $cuentas = mysqli_fetch_all($result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
 // Get categories
-$sql_categories = "SELECT id, nombre, tipo, color, icono FROM categorias WHERE (usuario_id = ? OR es_predefinida = 1) AND activa = 1 ORDER BY tipo, nombre";
+$activeCondition2 = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
+$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
+$sql_categories = "SELECT id, nombre, tipo, color, icono FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition2 . " ORDER BY tipo, nombre";
 $stmt = mysqli_prepare($link, $sql_categories);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);

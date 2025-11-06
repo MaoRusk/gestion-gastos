@@ -13,6 +13,7 @@ requireAuth();
 $user_id = getCurrentUserId();
 
 // Get current month budgets with actual spending
+$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'p.activo = TRUE' : 'p.activo = 1';
 $sql = "SELECT p.*, c.nombre as categoria_nombre, c.color as categoria_color, c.icono as categoria_icono,
                COALESCE(SUM(t.monto), 0) as gasto_real
         FROM presupuestos p
@@ -22,7 +23,7 @@ $sql = "SELECT p.*, c.nombre as categoria_nombre, c.color as categoria_color, c.
             AND t.tipo = 'gasto' 
             AND t.fecha >= p.fecha_inicio 
             AND t.fecha <= p.fecha_fin
-        WHERE p.usuario_id = ? AND p.activo = 1
+        WHERE p.usuario_id = ? AND " . $activeCondition . "
         GROUP BY p.id, p.nombre, p.monto_limite, p.fecha_inicio, p.fecha_fin, p.categoria_id, c.nombre, c.color, c.icono
         ORDER BY p.fecha_inicio DESC";
 

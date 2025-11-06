@@ -119,14 +119,14 @@ Puedes usar el archivo `render.yaml` que ya está creado:
    - **External Database URL**: Similar pero para conexiones externas
 
 3. **Extrae los valores**:
-   - Si la URL es: `postgresql://fime_user:abc123@dpg-xxxxx-a.oregon-postgres.render.com:5432/fime_gastos`
+   - Si la URL es: `postgresql://fime_user:abc123@dpg-xxxxx-a.oregon-postgres.render.com:5432/fime_gastos_db`
    - Entonces:
      ```
      DB_HOST=dpg-xxxxx-a.oregon-postgres.render.com
      DB_PORT=5432
      DB_USER=fime_user
      DB_PASSWORD=abc123
-     DB_NAME=fime_gastos
+     DB_NAME=fime_gastos_db
      ```
 
 4. **Variables de Entorno a configurar**:

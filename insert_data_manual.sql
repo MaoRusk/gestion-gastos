@@ -6,10 +6,10 @@
 -- 1. Abre MySQL Workbench
 -- 2. Conéctate a tu servidor MySQL/MariaDB
 -- 3. Ejecuta estos comandos uno por uno o todos juntos
--- 4. Asegúrate de estar en la base de datos 'fime_gastos'
+-- 4. Asegúrate de estar en la base de datos 'fime_gastos_db'
 -- ============================================================================
 
-USE fime_gastos;
+USE fime_gastos_db;
 
 -- ============================================================================
 -- 1. INSERTAR USUARIOS ADICIONALES

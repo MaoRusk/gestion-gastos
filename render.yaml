@@ -20,7 +20,7 @@ services:
 
 databases:
   - name: fime-gastos-db
-    databaseName: fime_gastos
+    databaseName: fime_gastos_db
     user: fime_gastos_user
     plan: free
 
