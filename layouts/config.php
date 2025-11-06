@@ -30,14 +30,21 @@ if (DB_TYPE === 'sqlite' && extension_loaded('pdo_sqlite')) {
 } elseif (DB_TYPE === 'postgresql' && extension_loaded('pdo_pgsql')) {
     /* Attempt to connect to PostgreSQL database using PDO */
     try {
-        $pdo = new PDO("pgsql:host=" . DB_SERVER . ";port=" . DB_PORT . ";dbname=" . DB_NAME, DB_USERNAME, DB_PASSWORD);
+        $dsn = "pgsql:host=" . DB_SERVER . ";port=" . DB_PORT . ";dbname=" . DB_NAME;
+        $pdo = new PDO($dsn, DB_USERNAME, DB_PASSWORD);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         // Create a mysqli-like interface using PDO
         $link = new stdClass();
         $link->pdo = $pdo;
         $link->type = 'postgresql';
     } catch(PDOException $e) {
-        die("ERROR: Could not connect to PostgreSQL. " . $e->getMessage());
+        // Mostrar información de depuración en caso de error
+        $error_msg = "ERROR: Could not connect to PostgreSQL.\n";
+        $error_msg .= "Connection String: pgsql:host=" . DB_SERVER . ";port=" . DB_PORT . ";dbname=" . DB_NAME . "\n";
+        $error_msg .= "User: " . DB_USERNAME . "\n";
+        $error_msg .= "Error: " . $e->getMessage() . "\n\n";
+        $error_msg .= "Debug: Visita /debug_config.php para ver la configuración completa.";
+        die($error_msg);
     }
 } elseif (extension_loaded('mysqli')) {
     /* Attempt to connect to MySQL database using mysqli */

@@ -115,8 +115,8 @@ try {
     $all_tables = [];
 }
 
-// Verificar tablas requeridas
-$required_tables = ['usuarios', 'cuentas_bancarias', 'categorias', 'transacciones', 'transferencias', 'presupuestos'];
+// Verificar tablas requeridas (incluir todas las tablas)
+$required_tables = ['usuarios', 'cuentas_bancarias', 'categorias', 'transacciones', 'transferencias', 'presupuestos', 'metas_ahorro', 'configuraciones'];
 
 echo "<h3>Verificación de Tablas Requeridas:</h3>";
 $tables_exist = [];
