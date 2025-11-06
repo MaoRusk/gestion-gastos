@@ -59,9 +59,11 @@ try {
     echo "<p class='warning'>⚠️ No se pudo verificar la base de datos actual: " . htmlspecialchars($e->getMessage()) . "</p>";
 }
 
-// Leer el esquema SQL - Priorizar el archivo completo de MySQL/MariaDB
+// Leer el esquema SQL - Priorizar archivo PostgreSQL si existe, sino MySQL/MariaDB
 $schema_file = null;
-if (file_exists('database_completo_mariaDB.sql')) {
+if (isset($link->type) && $link->type === 'postgresql' && file_exists('database_completo_postgresql.sql')) {
+    $schema_file = 'database_completo_postgresql.sql';
+} elseif (file_exists('database_completo_mariaDB.sql')) {
     $schema_file = 'database_completo_mariaDB.sql';
 } elseif (file_exists('database_schema.sql')) {
     $schema_file = 'database_schema.sql';
