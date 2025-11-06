@@ -316,7 +316,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         </div>
 
                                         <div class="text-end">
-                                            <a href="cuentas-lista.php" class="btn btn-light me-2">Cancelar</a>
+                                            <a href="cuentas-lista.php" class="btn btn-danger me-2">Cancelar</a>
                                             <?php if (!$read_only): ?>
                                                 <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar Cuenta' : 'Guardar Cuenta'; ?></button>
                                             <?php endif; ?>
@@ -343,11 +343,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <strong>Cuenta Corriente:</strong> Para gastos diarios
                                         </li>
                                         <li class="mb-2">
-                                            <i class="ri-piggy-bank-line text-success me-2"></i>
+                                            <i class="ri-money-dollar-box-line text-success me-2"></i>
                                             <strong>Cuenta de Ahorros:</strong> Para ahorrar dinero
                                         </li>
                                         <li class="mb-2">
-                                            <i class="ri-credit-card-line text-warning me-2"></i>
+                                            <i class="ri-bank-card-line text-warning me-2"></i>
                                             <strong>Tarjeta de Crédito:</strong> Para compras a crédito
                                         </li>
                                         <li class="mb-2">

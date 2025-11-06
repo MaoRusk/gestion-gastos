@@ -61,7 +61,7 @@ requireAuth();
                                             <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Balance Total</p>
                                         </div>
                                         <div class="flex-shrink-0">
-                                            <h5 class="text-success fs-14 mb-0">
+                                            <h5 class="text-primary fs-14 mb-0">
                                                 <i class="ri-arrow-right-up-line fs-13 align-middle"></i> +$12,350
                                             </h5>
                                         </div>
@@ -69,13 +69,13 @@ requireAuth();
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
                                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">$45,678</h4>
-                                            <span class="badge bg-success-subtle text-success mb-0">
+                                            <span class="badge bg-success-subtle text-primary mb-0">
                                                 <i class="ri-arrow-up-line align-middle"></i> +2.4%
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-success-subtle rounded fs-3">
-                                                <i class="ri-wallet-3-line text-success"></i>
+                                            <span class="avatar-title bg-soft-success rounded fs-3">
+                                                <i class="ri-money-dollar-circle-line text-primary"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -99,12 +99,12 @@ requireAuth();
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
                                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">$8,500</h4>
-                                            <span class="badge bg-success-subtle text-success mb-0">
+                                            <span class="badge bg-soft-success text-success mb-0">
                                                 <i class="ri-arrow-up-line align-middle"></i> +15.2%
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-success-subtle rounded fs-3">
+                                            <span class="avatar-title bg-soft-success rounded fs-3">
                                                 <i class="ri-arrow-up-line text-success"></i>
                                             </span>
                                         </div>
@@ -129,12 +129,12 @@ requireAuth();
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
                                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">$3,200</h4>
-                                            <span class="badge bg-danger-subtle text-danger mb-0">
+                                            <span class="badge bg-soft-success text-danger mb-0">
                                                 <i class="ri-arrow-down-line align-middle"></i> -8.1%
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-danger-subtle rounded fs-3">
+                                            <span class="avatar-title bg-soft-success rounded fs-3">
                                                 <i class="ri-arrow-down-line text-danger"></i>
                                             </span>
                                         </div>
@@ -159,13 +159,13 @@ requireAuth();
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
                                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">$5,300</h4>
-                                            <span class="badge bg-success-subtle text-success mb-0">
+                                            <span class="badge bg-soft-success text-success mb-0">
                                                 <i class="ri-arrow-up-line align-middle"></i> +32.5%
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-info-subtle rounded fs-3">
-                                                <i class="ri-piggy-bank-line text-info"></i>
+                                            <span class="avatar-title bg-soft-success rounded fs-3">
+                                                <i class="ri-wallet-3-line text-success"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -243,7 +243,7 @@ requireAuth();
                                                         <div class="d-flex align-items-center">
                                                             <div class="flex-shrink-0 me-2">
                                                                 <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-success-subtle text-success rounded">
+                                                                    <span class="avatar-title bg-soft-success text-success rounded">
                                                                         <i class="ri-arrow-up-line"></i>
                                                                     </span>
                                                                 </div>
@@ -263,7 +263,7 @@ requireAuth();
                                                         <div class="d-flex align-items-center">
                                                             <div class="flex-shrink-0 me-2">
                                                                 <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-danger-subtle text-danger rounded">
+                                                                    <span class="avatar-title bg-soft-danger text-danger rounded">
                                                                         <i class="ri-arrow-down-line"></i>
                                                                     </span>
                                                                 </div>
@@ -283,7 +283,7 @@ requireAuth();
                                                         <div class="d-flex align-items-center">
                                                             <div class="flex-shrink-0 me-2">
                                                                 <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-danger-subtle text-danger rounded">
+                                                                    <span class="avatar-title bg-soft-danger text-danger rounded">
                                                                         <i class="ri-arrow-down-line"></i>
                                                                     </span>
                                                                 </div>
@@ -303,7 +303,7 @@ requireAuth();
                                                         <div class="d-flex align-items-center">
                                                             <div class="flex-shrink-0 me-2">
                                                                 <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-danger-subtle text-danger rounded">
+                                                                    <span class="avatar-title bg-soft-danger text-danger rounded">
                                                                         <i class="ri-arrow-down-line"></i>
                                                                     </span>
                                                                 </div>

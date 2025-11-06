@@ -495,7 +495,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <div class="d-flex align-items-center mb-3">
                                         <div class="flex-shrink-0 me-2">
                                             <div class="avatar-xs">
-                                                <span class="avatar-title bg-success-subtle text-success rounded">
+                                                <span class="avatar-title bg-soft-success text-success rounded">
                                                     <i class="ri-arrow-up-line"></i>
                                                 </span>
                                             </div>
@@ -510,7 +510,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <div class="d-flex align-items-center mb-3">
                                         <div class="flex-shrink-0 me-2">
                                             <div class="avatar-xs">
-                                                <span class="avatar-title bg-danger-subtle text-danger rounded">
+                                                <span class="avatar-title bg-soft-danger text-danger rounded">
                                                     <i class="ri-arrow-down-line"></i>
                                                 </span>
                                             </div>
@@ -525,7 +525,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <div class="d-flex align-items-center mb-0">
                                         <div class="flex-shrink-0 me-2">
                                             <div class="avatar-xs">
-                                                <span class="avatar-title bg-danger-subtle text-danger rounded">
+                                                <span class="avatar-title bg-soft-danger text-danger rounded">
                                                     <i class="ri-arrow-down-line"></i>
                                                 </span>
                                             </div>

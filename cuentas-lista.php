@@ -199,7 +199,7 @@ $patrimonio_neto = $total_balance - $total_debt;
                                             <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Total en Cuentas</p>
                                         </div>
                                         <div class="flex-shrink-0">
-                                            <h5 class="text-success fs-14 mb-0">
+                                            <h5 class="text-primary fs-14 mb-0">
                                                 <i class="ri-arrow-up-line fs-13 align-middle"></i> +$18,900
                                             </h5>
                                         </div>
@@ -207,13 +207,13 @@ $patrimonio_neto = $total_balance - $total_debt;
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
                                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($total_balance, 2); ?></h4>
-                                            <span class="badge bg-success-subtle text-success mb-0">
+                                            <span class="badge bg-success-subtle text-primary mb-0">
                                                 <i class="ri-arrow-up-line align-middle"></i> Activo
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-success-subtle rounded fs-3">
-                                                <i class="ri-wallet-3-line text-success"></i>
+                                            <span class="avatar-title bg-soft-success rounded fs-3">
+                                                <i class="ri-wallet-3-line text-primary"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -242,8 +242,8 @@ $patrimonio_neto = $total_balance - $total_debt;
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-danger-subtle rounded fs-3">
-                                                <i class="ri-credit-card-line text-danger"></i>
+                                            <span class="avatar-title bg-soft-danger rounded fs-3">
+                                                <i class="ri-bank-card-line text-danger"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -272,7 +272,7 @@ $patrimonio_neto = $total_balance - $total_debt;
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
-                                            <span class="avatar-title bg-info-subtle rounded fs-3">
+                                            <span class="avatar-title bg-soft-info rounded fs-3">
                                                 <i class="ri-line-chart-line text-info"></i>
                                             </span>
                                         </div>
