@@ -137,15 +137,77 @@ if (isset($link->type)) {
     }
 }
 
-// Dividir en declaraciones
-$statements = array_filter(
-    array_map('trim', explode(';', $sql)),
-    function($stmt) {
-        return !empty($stmt) && 
-               !preg_match('/^(CREATE DATABASE|USE)/i', $stmt) &&
-               !preg_match('/^--/', $stmt);
+// Dividir en declaraciones - mejor manejo para PostgreSQL
+// Para PostgreSQL, necesitamos dividir cuidadosamente porque pueden tener funciones con ;
+$statements = [];
+if (isset($link->type) && $link->type === 'postgresql') {
+    // Para PostgreSQL, dividir por punto y coma pero mantener funciones completas
+    $lines = explode("\n", $sql);
+    $current_statement = '';
+    $in_function = false;
+    
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        
+        // Saltar comentarios y líneas vacías
+        if (empty($trimmed) || preg_match('/^--/', $trimmed)) {
+            continue;
+        }
+        
+        // Detectar inicio de función
+        if (preg_match('/CREATE\s+(OR\s+REPLACE\s+)?FUNCTION/i', $trimmed)) {
+            $in_function = true;
+            $current_statement = $trimmed . "\n";
+            continue;
+        }
+        
+        // Detectar fin de función
+        if ($in_function && preg_match('/\$\$/', $trimmed)) {
+            $current_statement .= $trimmed;
+            if (preg_match('/\$\$.*?;/', $trimmed)) {
+                $in_function = false;
+                $statements[] = trim($current_statement);
+                $current_statement = '';
+            }
+            continue;
+        }
+        
+        if ($in_function) {
+            $current_statement .= $trimmed . "\n";
+            continue;
+        }
+        
+        // Agregar línea al statement actual
+        $current_statement .= $trimmed . "\n";
+        
+        // Si termina con ;, es el final del statement
+        if (preg_match('/;\s*$/', $trimmed)) {
+            $stmt = trim($current_statement);
+            if (!empty($stmt) && !preg_match('/^(CREATE DATABASE|USE)/i', $stmt)) {
+                $statements[] = $stmt;
+            }
+            $current_statement = '';
+        }
     }
-);
+    
+    // Agregar el último statement si no terminó con ;
+    if (!empty(trim($current_statement))) {
+        $stmt = trim($current_statement);
+        if (!empty($stmt) && !preg_match('/^(CREATE DATABASE|USE)/i', $stmt)) {
+            $statements[] = $stmt;
+        }
+    }
+} else {
+    // Para MySQL/SQLite, división simple
+    $statements = array_filter(
+        array_map('trim', explode(';', $sql)),
+        function($stmt) {
+            return !empty($stmt) && 
+                   !preg_match('/^(CREATE DATABASE|USE)/i', $stmt) &&
+                   !preg_match('/^--/', $stmt);
+        }
+    );
+}
 
 $success_count = 0;
 $error_count = 0;
@@ -175,20 +237,62 @@ foreach ($statements as $statement) {
             // Usando PDO
             if (isset($link->pdo)) {
                 try {
+                    // Ejecutar el statement
                     $link->pdo->exec($statement);
                     $success_count++;
-                    echo "<p class='success'>✅ " . htmlspecialchars(substr($statement, 0, 60)) . "...</p>";
+                    
+                    // Identificar qué tipo de statement es
+                    $stmt_type = '';
+                    if (preg_match('/CREATE TABLE/i', $statement)) {
+                        preg_match('/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(\w+)/i', $statement, $matches);
+                        $stmt_type = $matches[1] ?? 'tabla';
+                    } elseif (preg_match('/CREATE (?:OR REPLACE )?FUNCTION/i', $statement)) {
+                        $stmt_type = 'función';
+                    } elseif (preg_match('/CREATE TRIGGER/i', $statement)) {
+                        $stmt_type = 'trigger';
+                    } elseif (preg_match('/INSERT INTO/i', $statement)) {
+                        preg_match('/INSERT INTO\s+(\w+)/i', $statement, $matches);
+                        $stmt_type = 'INSERT en ' . ($matches[1] ?? 'tabla');
+                    }
+                    
+                    if ($stmt_type) {
+                        echo "<p class='success'>✅ $stmt_type creado/ejecutado correctamente</p>";
+                    } else {
+                        echo "<p class='success'>✅ " . htmlspecialchars(substr($statement, 0, 60)) . "...</p>";
+                    }
                 } catch (PDOException $pdo_e) {
                     $error_count++;
                     $error_msg = $pdo_e->getMessage();
                     $errors[] = $error_msg;
-                    // Ignorar errores de "table already exists", "relation already exists", etc.
-                    if (strpos($error_msg, 'already exists') === false && 
-                        strpos($error_msg, 'Duplicate') === false &&
-                        strpos($error_msg, 'relation') === false &&
-                        strpos($error_msg, 'does not exist') === false) {
-                        echo "<p class='error'>⚠️ Error: " . htmlspecialchars($error_msg) . "</p>";
-                        echo "<pre>" . htmlspecialchars(substr($statement, 0, 200)) . "...</pre>";
+                    
+                    // Determinar si es un error que podemos ignorar
+                    $is_duplicate_error = (
+                        strpos($error_msg, 'already exists') !== false || 
+                        strpos($error_msg, 'Duplicate') !== false ||
+                        (strpos($error_msg, 'relation') !== false && strpos($error_msg, 'already exists') !== false)
+                    );
+                    
+                    // Si es un error de "relation does not exist" en un CREATE TABLE, es un problema real
+                    $is_critical_error = (
+                        strpos($error_msg, 'does not exist') !== false && 
+                        preg_match('/CREATE TABLE/i', $statement) &&
+                        strpos($error_msg, 'relation') !== false &&
+                        strpos($error_msg, 'already exists') === false
+                    );
+                    
+                    if ($is_duplicate_error) {
+                        // Ya existe, ignorar pero contar como éxito
+                        $success_count++;
+                        echo "<p class='info'>ℹ️ Ya existe (ignorado): " . htmlspecialchars(substr($statement, 0, 50)) . "...</p>";
+                    } else {
+                        // Error real, mostrar y mantener el conteo de error
+                        echo "<p class='error'>❌ Error: " . htmlspecialchars($error_msg) . "</p>";
+                        echo "<pre>" . htmlspecialchars(substr($statement, 0, 300)) . "...</pre>";
+                        
+                        // Si es un error crítico, intentar continuar pero advertir
+                        if ($is_critical_error) {
+                            echo "<p class='warning'>⚠️ Error crítico detectado. Puede ser por dependencias faltantes.</p>";
+                        }
                     }
                 }
             }
