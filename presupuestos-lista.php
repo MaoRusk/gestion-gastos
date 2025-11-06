@@ -235,8 +235,13 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                                                             <i class="ri-more-fill align-middle"></i>
                                                                         </a>
                                                                         <ul class="dropdown-menu dropdown-menu-end">
-                                                                            <li><a class="dropdown-item" href="presupuestos-editar.php?id=<?php echo $presupuesto['id']; ?>"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
-                                                                            <li><a class="dropdown-item" href="#" onclick="eliminarPresupuesto(<?php echo $presupuesto['id']; ?>)"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</a></li>
+                                                                            <li><a class="dropdown-item" href="presupuestos-agregar.php?id=<?php echo $presupuesto['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
+                                                                            <li>
+                                                                                <form action="presupuestos-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este presupuesto?');" style="margin:0;padding:0;">
+                                                                                    <input type="hidden" name="id" value="<?php echo (int)$presupuesto['id']; ?>">
+                                                                                    <button type="submit" class="dropdown-item text-danger"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</button>
+                                                                                </form>
+                                                                            </li>
                                                                         </ul>
                                                                     </div>
                                                                 </div>

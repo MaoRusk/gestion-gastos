@@ -118,12 +118,17 @@ foreach ($categorias as $categoria) {
                                                                                 <i class="ri-more-fill align-middle"></i>
                                                                             </a>
                                                                             <ul class="dropdown-menu dropdown-menu-end">
-                                                                                <?php if (!$categoria['es_predefinida']): ?>
-                                                                                    <li><a class="dropdown-item" href="categorias-editar.php?id=<?php echo $categoria['id']; ?>"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
-                                                                                    <li><a class="dropdown-item" href="#" onclick="eliminarCategoria(<?php echo $categoria['id']; ?>)"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</a></li>
-                                                                                <?php else: ?>
-                                                                                    <li><span class="dropdown-item text-muted"><i class="ri-lock-line align-bottom me-2"></i> No editable</span></li>
-                                                                                <?php endif; ?>
+                                                                                        <?php if (!$categoria['es_predefinida']): ?>
+                                                                                            <li><a class="dropdown-item" href="categorias-agregar.php?id=<?php echo $categoria['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
+                                                                                            <li>
+                                                                                                <form action="categorias-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que quieres eliminar esta categoría?');" style="margin:0;padding:0;">
+                                                                                                    <input type="hidden" name="id" value="<?php echo (int)$categoria['id']; ?>">
+                                                                                                    <button type="submit" class="dropdown-item text-danger"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</button>
+                                                                                                </form>
+                                                                                            </li>
+                                                                                        <?php else: ?>
+                                                                                            <li><span class="dropdown-item text-muted"><i class="ri-lock-line align-bottom me-2"></i> No editable</span></li>
+                                                                                        <?php endif; ?>
                                                                             </ul>
                                                                         </div>
                                                                     </div>

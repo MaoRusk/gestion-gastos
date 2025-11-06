@@ -5,19 +5,19 @@
         <!-- Dark Logo-->
         <a href="dashboard-gastos.php" class="logo logo-dark">
             <span class="logo-sm">
-                <img src="assets/images/logo-sm.png" alt="" height="22">
+                <img src="assets/images/oso-logo.png" alt="" height="22">
             </span>
             <span class="logo-lg">
-                <img src="assets/images/logo-dark.png" alt="" height="17">
+                <img src="assets/images/fime.png" alt="" height="80">
             </span>
         </a>
         <!-- Light Logo-->
         <a href="dashboard-gastos.php" class="logo logo-light">
             <span class="logo-sm">
-                <img src="assets/images/logo-sm.png" alt="" height="22">
+                <img src="assets/images/oso-logo.png" alt="" height="22">
             </span>
             <span class="logo-lg">
-                <img src="assets/images/logo-light.png" alt="" height="17">
+                <img src="assets/images/fime.png" alt="" height="80">
             </span>
         </a>
         <button type="button" class="btn btn-sm p-0 fs-20 header-item float-end btn-vertical-sm-hover"
@@ -128,12 +128,14 @@
                     </div>
                 </li>
 
-                <!-- Gestión de Usuarios -->
+                <!-- Gestión de Usuarios (solo administradores) -->
+                <?php if (function_exists('isAdmin') && isAdmin()): ?>
                 <li class="nav-item">
                     <a class="nav-link menu-link" href="usuarios-lista.php">
                         <i class="ri-user-settings-line"></i> <span>Usuarios del Sistema</span>
                     </a>
                 </li>
+                <?php endif; ?>
 
                 <!-- Configuración del Sistema -->
                 <!-- <li class="nav-item">

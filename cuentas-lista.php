@@ -167,9 +167,14 @@ $patrimonio_neto = $total_balance - $total_debt;
                                                                         <i class="ri-more-fill align-middle"></i>
                                                                     </a>
                                                                     <ul class="dropdown-menu dropdown-menu-end">
-                                                                        <li><a class="dropdown-item" href="#"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> Ver Detalles</a></li>
-                                                                        <li><a class="dropdown-item" href="#"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
-                                                                        <li><a class="dropdown-item" href="#"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</a></li>
+                                                                        <li><a class="dropdown-item" href="cuentas-agregar.php?id=<?php echo (int)$cuenta['id']; ?>&amp;mode=view"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> Ver Detalles</a></li>
+                                                                        <li><a class="dropdown-item" href="cuentas-agregar.php?id=<?php echo (int)$cuenta['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
+                                                                        <li>
+                                                                            <form action="cuentas-eliminar.php" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar esta cuenta?');" style="margin:0;padding:0;">
+                                                                                <input type="hidden" name="id" value="<?php echo (int)$cuenta['id']; ?>">
+                                                                                <button type="submit" class="dropdown-item text-danger"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</button>
+                                                                            </form>
+                                                                        </li>
                                                                     </ul>
                                                                 </div>
                                                             </td>

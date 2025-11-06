@@ -51,7 +51,7 @@ function isAdmin() {
 /**
  * Registrar un nuevo usuario
  */
-function registerUser($nombre, $email, $password, $telefono = null, $fecha_nacimiento = null) {
+function registerUser($nombre, $email, $password, $telefono = null, $fecha_nacimiento = null, $genero = null, $ciudad = null, $estado = null) {
     global $link;
     
     // Verificar si el email ya existe
@@ -70,11 +70,13 @@ function registerUser($nombre, $email, $password, $telefono = null, $fecha_nacim
         // Hash de la contraseña
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
         
-        // Insertar nuevo usuario
-        $insert_user = "INSERT INTO usuarios (nombre, email, password_hash, telefono, fecha_nacimiento) VALUES (?, ?, ?, ?, ?)";
+        // Insertar nuevo usuario (incluye genero/ciudad/estado)
+        $insert_user = "INSERT INTO usuarios (nombre, email, password_hash, telefono, fecha_nacimiento, genero, ciudad, estado, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $link->pdo->prepare($insert_user);
         
-        if ($stmt->execute([$nombre, $email, $hashed_password, $telefono, $fecha_nacimiento])) {
+        // activo por defecto = TRUE/1
+        $activo_val = 1;
+        if ($stmt->execute([$nombre, $email, $hashed_password, $telefono, $fecha_nacimiento, $genero, $ciudad, $estado, $activo_val])) {
             $user_id = $link->pdo->lastInsertId();
             
             // Crear categorías personalizadas para el usuario
@@ -99,10 +101,11 @@ function registerUser($nombre, $email, $password, $telefono = null, $fecha_nacim
         // Hash de la contraseña
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
         
-        // Insertar nuevo usuario
-        $insert_user = "INSERT INTO usuarios (nombre, email, password_hash, telefono, fecha_nacimiento) VALUES (?, ?, ?, ?, ?)";
+        // Insertar nuevo usuario (incluye genero/ciudad/estado y activo)
+        $insert_user = "INSERT INTO usuarios (nombre, email, password_hash, telefono, fecha_nacimiento, genero, ciudad, estado, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = mysqli_prepare($link, $insert_user);
-        mysqli_stmt_bind_param($stmt, "sssss", $nombre, $email, $hashed_password, $telefono, $fecha_nacimiento);
+        $activo_int = 1;
+        mysqli_stmt_bind_param($stmt, "ssssssssi", $nombre, $email, $hashed_password, $telefono, $fecha_nacimiento, $genero, $ciudad, $estado, $activo_int);
         
         if (mysqli_stmt_execute($stmt)) {
             $user_id = mysqli_insert_id($link);
@@ -212,7 +215,9 @@ function createUserCategories($user_id) {
     global $link;
     
     // Obtener categorías predefinidas
-    $sql = "SELECT * FROM categorias WHERE es_predefinida = 1";
+    // Use boolean TRUE for PostgreSQL, numeric 1 for MySQL/SQLite
+    $esPredefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'es_predefinida = TRUE' : 'es_predefinida = 1';
+    $sql = "SELECT * FROM categorias WHERE " . $esPredefCondition;
     
     // Check if using PDO
     if (isset($link->pdo)) {
@@ -222,7 +227,9 @@ function createUserCategories($user_id) {
         $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         foreach ($categories as $category) {
-            $insert = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, es_predefinida) VALUES (?, ?, ?, ?, ?, 0)";
+            // Use FALSE for PostgreSQL booleans, 0 otherwise
+            $esPredefValue = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'FALSE' : '0';
+            $insert = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, es_predefinida) VALUES (?, ?, ?, ?, ?, " . $esPredefValue . ")";
             $insert_stmt = $link->pdo->prepare($insert);
             $insert_stmt->execute([$user_id, $category['nombre'], $category['tipo'], $category['color'], $category['icono']]);
         }

@@ -9,10 +9,58 @@ require_once "includes/auth_functions.php";
 // Check if the user is logged in, if not then redirect him to login page
 requireAuth();
 
-// Define variables and initialize with empty values
-$descripcion = $monto = $tipo = $categoria_id = $cuenta_id = $fecha = $notas = "";
+// Mode handling: add (default), edit, view
+$mode = isset($_GET['mode']) ? $_GET['mode'] : 'add';
+$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$is_edit = ($mode === 'edit' && $id > 0);
+$is_view = ($mode === 'view' && $id > 0);
+
+// Define variables and initialize with empty values (preserve any prefilled values when loading an existing record)
+$descripcion = isset($descripcion) ? $descripcion : '';
+$monto = isset($monto) ? $monto : '';
+$tipo = isset($tipo) ? $tipo : '';
+$categoria_id = isset($categoria_id) ? $categoria_id : '';
+$cuenta_id = isset($cuenta_id) ? $cuenta_id : '';
+$fecha = isset($fecha) ? $fecha : date('Y-m-d');
+$notas = isset($notas) ? $notas : '';
+$recurrente = false;
+$frecuencia = '';
+$fecha_fin = '';
 $descripcion_err = $monto_err = $tipo_err = $categoria_err = $cuenta_err = "";
 $success_message = "";
+
+// If editing or viewing, load the existing transaction and ensure ownership, then prefill vars
+if (($is_edit || $is_view) && $id > 0) {
+    $sql = "SELECT * FROM transacciones WHERE id = ? LIMIT 1";
+    if ($stmt = mysqli_prepare($link, $sql)) {
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = mysqli_fetch_assoc($res);
+        mysqli_stmt_close($stmt);
+
+        if (!$row) {
+            header('Location: transacciones-lista.php');
+            exit;
+        }
+
+        if ($row['usuario_id'] != getCurrentUserId()) {
+            die('No tienes permiso para ver/editar esta transacción');
+        }
+
+        // Prefill form values
+        $descripcion = $row['descripcion'];
+        $monto = $row['monto'];
+        $tipo = $row['tipo'];
+        $categoria_id = $row['categoria_id'];
+        $cuenta_id = $row['cuenta_id'];
+        $fecha = $row['fecha'];
+        $notas = $row['notas'];
+        $recurrente = !empty($row['recurrente']);
+        $frecuencia = $row['frecuencia'];
+        $fecha_fin = $row['fecha_fin_recurrencia'];
+    }
+}
 
 // Get user's accounts and categories
 $user_id = getCurrentUserId();
@@ -80,67 +128,118 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fecha = !empty($_POST["fecha"]) ? $_POST["fecha"] : date('Y-m-d');
     $notas = !empty($_POST["notas"]) ? sanitizeInput($_POST["notas"]) : null;
 
-    // Check input errors before inserting in database
+    // Check input errors before inserting/updating in database
     if (empty($descripcion_err) && empty($monto_err) && empty($tipo_err) && empty($categoria_err) && empty($cuenta_err)) {
-        
+        $post_mode = isset($_POST['mode']) ? $_POST['mode'] : 'add';
+        $post_id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+
         // Start transaction
         mysqli_begin_transaction($link);
-        
+
         try {
-            // Insert transaction
-            $sql = "INSERT INTO transacciones (usuario_id, cuenta_id, categoria_id, descripcion, monto, tipo, fecha, notas, recurrente, frecuencia, fecha_fin_recurrencia) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
             $recurrente = isset($_POST["recurrente"]) ? 1 : 0;
             $frecuencia = !empty($_POST["frecuencia"]) ? $_POST["frecuencia"] : null;
             $fecha_fin = !empty($_POST["fecha_fin"]) ? $_POST["fecha_fin"] : null;
-            
-            if ($stmt = mysqli_prepare($link, $sql)) {
-                mysqli_stmt_bind_param($stmt, "iiisdsissss", $user_id, $cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin);
-                
-                if (mysqli_stmt_execute($stmt)) {
-                    $transaction_id = mysqli_insert_id($link);
-                    
-                    // Update account balance
-                    $balance_change = ($tipo == 'ingreso') ? $monto : -$monto;
-                    $update_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
-                    $stmt2 = mysqli_prepare($link, $update_balance);
-                    mysqli_stmt_bind_param($stmt2, "di", $balance_change, $cuenta_id);
-                    mysqli_stmt_execute($stmt2);
-                    mysqli_stmt_close($stmt2);
-                    
-                    // If it's a transfer, handle the destination account
-                    if ($tipo == 'transferencia' && !empty($_POST["cuenta_destino_id"])) {
-                        $cuenta_destino_id = intval($_POST["cuenta_destino_id"]);
-                        
-                        // Add to destination account
-                        $update_dest_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
-                        $stmt3 = mysqli_prepare($link, $update_dest_balance);
-                        mysqli_stmt_bind_param($stmt3, "di", $monto, $cuenta_destino_id);
-                        mysqli_stmt_execute($stmt3);
-                        mysqli_stmt_close($stmt3);
-                        
-                        // Insert transfer record
-                        $insert_transfer = "INSERT INTO transferencias (usuario_id, cuenta_origen_id, cuenta_destino_id, monto, descripcion, fecha) VALUES (?, ?, ?, ?, ?, ?)";
-                        $stmt4 = mysqli_prepare($link, $insert_transfer);
-                        mysqli_stmt_bind_param($stmt4, "iiisss", $user_id, $cuenta_id, $cuenta_destino_id, $monto, $descripcion, $fecha);
-                        mysqli_stmt_execute($stmt4);
-                        mysqli_stmt_close($stmt4);
-                    }
-                    
-                    mysqli_commit($link);
-                    $success_message = "Transacción agregada exitosamente!";
-                    
-                    // Clear form
-                    $descripcion = $monto = $tipo = $categoria_id = $cuenta_id = $notas = "";
-                    $fecha = date('Y-m-d');
-                    
-                } else {
-                    throw new Exception("Error al insertar transacción: " . mysqli_error($link));
+
+            if ($post_mode === 'edit' && $post_id > 0) {
+                // Fetch original transaction to compute balance deltas
+                $orig = null;
+                if ($s = mysqli_prepare($link, "SELECT * FROM transacciones WHERE id = ? LIMIT 1")) {
+                    mysqli_stmt_bind_param($s, 'i', $post_id);
+                    mysqli_stmt_execute($s);
+                    $r = mysqli_stmt_get_result($s);
+                    $orig = mysqli_fetch_assoc($r);
+                    mysqli_stmt_close($s);
                 }
-                
-                mysqli_stmt_close($stmt);
+
+                if (!$orig || $orig['usuario_id'] != $user_id) {
+                    throw new Exception('No tienes permiso para editar esta transacción');
+                }
+
+                // Update transacciones row
+                $update_sql = "UPDATE transacciones SET cuenta_id = ?, categoria_id = ?, descripcion = ?, monto = ?, tipo = ?, fecha = ?, notas = ?, recurrente = ?, frecuencia = ?, fecha_fin_recurrencia = ? WHERE id = ?";
+                if ($ust = mysqli_prepare($link, $update_sql)) {
+                    mysqli_stmt_bind_param($ust, 'iisdsiisssi', $cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin, $post_id);
+                    mysqli_stmt_execute($ust);
+                    mysqli_stmt_close($ust);
+                }
+
+                // Compute balance adjustments
+                $orig_change = ($orig['tipo'] == 'ingreso') ? floatval($orig['monto']) : -floatval($orig['monto']);
+                $new_change = ($tipo == 'ingreso') ? floatval($monto) : -floatval($monto);
+
+                if ($orig['cuenta_id'] == $cuenta_id) {
+                    $delta = $new_change - $orig_change;
+                    if ($delta != 0) {
+                        $upd = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
+                        mysqli_stmt_bind_param($upd, 'di', $delta, $cuenta_id);
+                        mysqli_stmt_execute($upd);
+                        mysqli_stmt_close($upd);
+                    }
+                } else {
+                    // Revert original on old account
+                    $revert = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual - ? WHERE id = ?");
+                    mysqli_stmt_bind_param($revert, 'di', $orig_change, $orig['cuenta_id']);
+                    mysqli_stmt_execute($revert);
+                    mysqli_stmt_close($revert);
+
+                    // Apply new change to new account
+                    $apply = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
+                    mysqli_stmt_bind_param($apply, 'di', $new_change, $cuenta_id);
+                    mysqli_stmt_execute($apply);
+                    mysqli_stmt_close($apply);
+                }
+
+                // Note: transfer records table not updated here (out of scope)
+
+                mysqli_commit($link);
+                $success_message = "Transacción actualizada exitosamente!";
+
+            } else {
+                // Insert transaction
+                $sql = "INSERT INTO transacciones (usuario_id, cuenta_id, categoria_id, descripcion, monto, tipo, fecha, notas, recurrente, frecuencia, fecha_fin_recurrencia) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                if ($stmt = mysqli_prepare($link, $sql)) {
+                    mysqli_stmt_bind_param($stmt, "iiisdsissss", $user_id, $cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin);
+                    if (mysqli_stmt_execute($stmt)) {
+                        $transaction_id = mysqli_insert_id($link);
+
+                        // Update account balance
+                        $balance_change = ($tipo == 'ingreso') ? $monto : -$monto;
+                        $update_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
+                        $stmt2 = mysqli_prepare($link, $update_balance);
+                        mysqli_stmt_bind_param($stmt2, "di", $balance_change, $cuenta_id);
+                        mysqli_stmt_execute($stmt2);
+                        mysqli_stmt_close($stmt2);
+
+                        // If it's a transfer, handle the destination account
+                        if ($tipo == 'transferencia' && !empty($_POST["cuenta_destino_id"])) {
+                            $cuenta_destino_id = intval($_POST["cuenta_destino_id"]);
+                            $update_dest_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
+                            $stmt3 = mysqli_prepare($link, $update_dest_balance);
+                            mysqli_stmt_bind_param($stmt3, "di", $monto, $cuenta_destino_id);
+                            mysqli_stmt_execute($stmt3);
+                            mysqli_stmt_close($stmt3);
+
+                            $insert_transfer = "INSERT INTO transferencias (usuario_id, cuenta_origen_id, cuenta_destino_id, monto, descripcion, fecha) VALUES (?, ?, ?, ?, ?, ?)";
+                            $stmt4 = mysqli_prepare($link, $insert_transfer);
+                            mysqli_stmt_bind_param($stmt4, "iiisss", $user_id, $cuenta_id, $cuenta_destino_id, $monto, $descripcion, $fecha);
+                            mysqli_stmt_execute($stmt4);
+                            mysqli_stmt_close($stmt4);
+                        }
+
+                        mysqli_commit($link);
+                        $success_message = "Transacción agregada exitosamente!";
+
+                        // Clear form
+                        $descripcion = $monto = $tipo = $categoria_id = $cuenta_id = $notas = "";
+                        $fecha = date('Y-m-d');
+                    } else {
+                        throw new Exception("Error al insertar transacción: " . mysqli_error($link));
+                    }
+                    mysqli_stmt_close($stmt);
+                }
             }
-            
+
         } catch (Exception $e) {
             mysqli_rollback($link);
             $success_message = "Error: " . $e->getMessage();
@@ -204,12 +303,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         </div>
                                     <?php endif; ?>
                                     
-                                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                    <?php
+                                    $form_action = htmlspecialchars($_SERVER["PHP_SELF"]);
+                                    $read_only = ($is_view);
+                                    ?>
+
+                                    <form action="<?php echo $form_action; ?>" method="post">
+                                        <?php if ($is_edit || $is_view): ?>
+                                            <input type="hidden" name="id" value="<?php echo (int)$id; ?>">
+                                            <input type="hidden" name="mode" value="<?php echo $is_edit ? 'edit' : 'view'; ?>">
+                                        <?php endif; ?>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($tipo_err)) ? 'has-error' : ''; ?>">
                                                     <label for="tipo" class="form-label">Tipo de Transacción <span class="text-danger">*</span></label>
-                                                    <select class="form-select" id="tipo" name="tipo" onchange="toggleTipoTransaccion()">
+                                                        <select class="form-select" id="tipo" name="tipo" onchange="toggleTipoTransaccion()" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                         <option value="">Seleccionar tipo</option>
                                                         <option value="ingreso" <?php echo ($tipo == 'ingreso') ? 'selected' : ''; ?>>Ingreso</option>
                                                         <option value="gasto" <?php echo ($tipo == 'gasto') ? 'selected' : ''; ?>>Gasto</option>
@@ -223,7 +331,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                     <label for="monto" class="form-label">Monto <span class="text-danger">*</span></label>
                                                     <div class="input-group">
                                                         <span class="input-group-text">$</span>
-                                                        <input type="number" class="form-control" id="monto" name="monto" value="<?php echo $monto; ?>" placeholder="0.00" step="0.01">
+                                                        <input type="number" class="form-control" id="monto" name="monto" value="<?php echo $monto; ?>" placeholder="0.00" step="0.01" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     </div>
                                                     <span class="text-danger"><?php echo $monto_err; ?></span>
                                                 </div>
@@ -234,14 +342,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($descripcion_err)) ? 'has-error' : ''; ?>">
                                                     <label for="descripcion" class="form-label">Descripción <span class="text-danger">*</span></label>
-                                                    <input type="text" class="form-control" id="descripcion" name="descripcion" value="<?php echo $descripcion; ?>" placeholder="Ej: Compra en supermercado">
+                                                    <input type="text" class="form-control" id="descripcion" name="descripcion" value="<?php echo $descripcion; ?>" placeholder="Ej: Compra en supermercado" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     <span class="text-danger"><?php echo $descripcion_err; ?></span>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($categoria_err)) ? 'has-error' : ''; ?>">
                                                     <label for="categoria_id" class="form-label">Categoría <span class="text-danger">*</span></label>
-                                                    <select class="form-select" id="categoria_id" name="categoria_id">
+                                                    <select class="form-select" id="categoria_id" name="categoria_id" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                         <option value="">Seleccionar categoría</option>
                                                         <?php 
                                                         $current_tipo = '';
@@ -268,7 +376,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($cuenta_err)) ? 'has-error' : ''; ?>">
                                                     <label for="cuenta_id" class="form-label">Cuenta <span class="text-danger">*</span></label>
-                                                    <select class="form-select" id="cuenta_id" name="cuenta_id">
+                                                    <select class="form-select" id="cuenta_id" name="cuenta_id" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                         <option value="">Seleccionar cuenta</option>
                                                         <?php foreach ($cuentas as $cuenta): ?>
                                                             <option value="<?php echo $cuenta['id']; ?>" <?php echo ($cuenta_id == $cuenta['id']) ? 'selected' : ''; ?>>
@@ -282,7 +390,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3">
                                                     <label for="fecha" class="form-label">Fecha <span class="text-danger">*</span></label>
-                                                    <input type="date" class="form-control" id="fecha" name="fecha" value="<?php echo $fecha; ?>">
+                                                    <input type="date" class="form-control" id="fecha" name="fecha" value="<?php echo $fecha; ?>" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                 </div>
                                             </div>
                                         </div>
@@ -293,7 +401,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label for="cuenta_destino_id" class="form-label">Cuenta de Destino</label>
-                                                        <select class="form-select" id="cuenta_destino_id" name="cuenta_destino_id">
+                                                        <select class="form-select" id="cuenta_destino_id" name="cuenta_destino_id" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                             <option value="">Seleccionar cuenta destino</option>
                                                             <?php foreach ($cuentas as $cuenta): ?>
                                                                 <option value="<?php echo $cuenta['id']; ?>">
@@ -308,12 +416,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                                         <div class="mb-3">
                                             <label for="notas" class="form-label">Notas</label>
-                                            <textarea class="form-control" id="notas" name="notas" rows="3" placeholder="Información adicional sobre la transacción"><?php echo $notas; ?></textarea>
+                                            <textarea class="form-control" id="notas" name="notas" rows="3" placeholder="Información adicional sobre la transacción" <?php echo $read_only ? 'disabled' : ''; ?>><?php echo $notas; ?></textarea>
                                         </div>
 
                                         <div class="mb-3">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="recurrente" name="recurrente">
+                                                <input class="form-check-input" type="checkbox" id="recurrente" name="recurrente" <?php echo ($recurrente ? 'checked' : ''); ?> <?php echo $read_only ? 'disabled' : ''; ?>>
                                                 <label class="form-check-label" for="recurrente">
                                                     Transacción recurrente
                                                 </label>
@@ -325,7 +433,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
                                                         <label for="frecuencia" class="form-label">Frecuencia</label>
-                                                        <select class="form-select" id="frecuencia" name="frecuencia">
+                                                        <select class="form-select" id="frecuencia" name="frecuencia" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                             <option value="semanal">Semanal</option>
                                                             <option value="mensual">Mensual</option>
                                                             <option value="anual">Anual</option>
@@ -343,7 +451,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                                         <div class="text-end">
                                             <a href="transacciones-lista.php" class="btn btn-light me-2">Cancelar</a>
-                                            <button type="submit" class="btn btn-primary">Guardar Transacción</button>
+                                            <?php if (!$read_only): ?>
+                                                <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar Transacción' : 'Guardar Transacción'; ?></button>
+                                            <?php endif; ?>
                                         </div>
                                     </form>
                                 </div>

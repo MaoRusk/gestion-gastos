@@ -10,7 +10,7 @@ if (isLoggedIn()) {
 }
 
 // Define variables and initialize with empty values
-$nombre = $email = $password = $confirm_password = $telefono = $fecha_nacimiento = "";
+$nombre = $email = $password = $confirm_password = $telefono = $fecha_nacimiento = $genero = $ciudad = $estado = "";
 $nombre_err = $email_err = $password_err = $confirm_password_err = "";
 $register_message = "";
 
@@ -55,15 +55,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Optional fields
     $telefono = !empty($_POST["telefono"]) ? sanitizeInput($_POST["telefono"]) : null;
     $fecha_nacimiento = !empty($_POST["fecha_nacimiento"]) ? $_POST["fecha_nacimiento"] : null;
+    $genero = !empty($_POST["genero"]) ? sanitizeInput($_POST["genero"]) : null;
+    $ciudad = !empty($_POST["ciudad"]) ? sanitizeInput($_POST["ciudad"]) : null;
+    $estado = !empty($_POST["estado"]) ? sanitizeInput($_POST["estado"]) : null;
 
     // Check input errors before inserting in database
     if (empty($nombre_err) && empty($email_err) && empty($password_err) && empty($confirm_password_err)) {
-        $result = registerUser($nombre, $email, $password, $telefono, $fecha_nacimiento);
-        
-        if ($result['success']) {
-            $register_message = "¡Registro exitoso! Ahora puedes iniciar sesión.";
-            // Clear form
-            $nombre = $email = $password = $confirm_password = $telefono = $fecha_nacimiento = "";
+    $result = registerUser($nombre, $email, $password, $telefono, $fecha_nacimiento, $genero, $ciudad, $estado);
+
+    // Debug: log registration attempts (temporary)
+    @file_put_contents('/tmp/signup_debug.log', json_encode(['time' => date('c'), 'email' => $email, 'result' => $result]) . PHP_EOL, FILE_APPEND);
+
+    if ($result['success']) {
+            // Successful registration: redirect to signin page with a flag so signin can show a success message
+            header('Location: auth-signin-basic.php?registered=1');
+            exit;
         } else {
             $register_message = $result['message'];
         }
@@ -103,7 +109,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <div class="text-center mt-sm-5 mb-4 text-white-50">
                                 <div>
                                     <a href="index.php" class="d-inline-block auth-logo">
-                                        <img src="assets/images/logo-light.png" alt="" height="20">
+                                        <img src="assets/images/fime.png" alt="" height="82">
                                     </a>
                                 </div>
                                 <p class="mt-3 fs-15 fw-medium">Sistema de Gestión de Gastos Personales</p>
@@ -158,6 +164,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                 <input type="date" class="form-control" name="fecha_nacimiento" value="<?php echo $fecha_nacimiento; ?>" id="fecha_nacimiento">
                                             </div>
 
+                                            <div class="row">
+                                                <div class="col-md-4 mb-3">
+                                                    <label for="genero" class="form-label">Género</label>
+                                                    <select class="form-control" name="genero" id="genero">
+                                                        <option value="" <?php echo $genero==='' ? 'selected' : ''; ?>>Prefer not to say</option>
+                                                        <option value="Masculino" <?php echo $genero==='Masculino' ? 'selected' : ''; ?>>Masculino</option>
+                                                        <option value="Femenino" <?php echo $genero==='Femenino' ? 'selected' : ''; ?>>Femenino</option>
+                                                        <option value="Otro" <?php echo $genero==='Otro' ? 'selected' : ''; ?>>Otro</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <label for="ciudad" class="form-label">Ciudad</label>
+                                                    <input type="text" class="form-control" name="ciudad" value="<?php echo htmlspecialchars($ciudad); ?>" id="ciudad" placeholder="Ciudad">
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <label for="estado" class="form-label">Estado</label>
+                                                    <input type="text" class="form-control" name="estado" value="<?php echo htmlspecialchars($estado); ?>" id="estado" placeholder="Estado / País">
+                                                </div>
+                                            </div>
+
                                             <div class="mb-3 <?php echo (!empty($password_err)) ? 'has-error' : ''; ?>">
                                                 <label class="form-label" for="password-input">Contraseña <span class="text-danger">*</span></label>
                                                 <div class="position-relative auth-pass-inputgroup">
@@ -176,9 +202,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                 </div>
                                             </div>
 
-                                            <div class="mb-4">
+                                            <!-- <div class="mb-4">
                                                 <p class="mb-0 fs-12 text-muted fst-italic">Al registrarte aceptas los <a href="#" class="text-primary text-decoration-underline fst-normal fw-medium">Términos de Uso</a> del sistema</p>
-                                            </div>
+                                            </div> -->
 
                                             <div class="mt-4">
                                                 <button class="btn btn-success w-100" type="submit">Registrarse</button>
@@ -209,7 +235,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="row">
                         <div class="col-lg-12">
                             <div class="text-center">
-                                <p class="mb-0 text-muted">&copy; <script>document.write(new Date().getFullYear())</script> Velzon. Crafted with <i class="mdi mdi-heart text-danger"></i> by Themesbrand</p>
+                                <!-- <p class="mb-0 text-muted">&copy; <script>document.write(new Date().getFullYear())</script> Velzon. Crafted with <i class="mdi mdi-heart text-danger"></i> by Themesbrand</p> -->
                             </div>
                         </div>
                     </div>
@@ -229,6 +255,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <script src="assets/js/pages/form-validation.init.js"></script>
         <!-- password create init -->
         <script src="assets/js/pages/passowrd-create.init.js"></script>
+        <script>
+            // Extra client-side check: confirm password matches password before allowing submit
+            (function(){
+                document.addEventListener('DOMContentLoaded', function(){
+                    var form = document.querySelector('.needs-validation');
+                    if(!form) return;
+                    var pwd = form.querySelector('input[name="password"]');
+                    var conf = form.querySelector('input[name="confirm_password"]');
+                    if(!pwd || !conf) return;
+
+                    // Clear custom validity as user types
+                    var clearValidity = function(){
+                        conf.setCustomValidity('');
+                    };
+                    pwd.addEventListener('input', clearValidity);
+                    conf.addEventListener('input', clearValidity);
+
+                    form.addEventListener('submit', function(e){
+                        // Let browser native/Bootstrap validation run first
+                        if (form.checkValidity() === false) {
+                            // default handler in form-validation.init.js will prevent submission
+                            return;
+                        }
+
+                        if (pwd.value !== conf.value) {
+                            // Set custom validity so the browser shows an error
+                            conf.setCustomValidity('Las contraseñas no coinciden');
+                            conf.reportValidity();
+                            e.preventDefault();
+                            e.stopPropagation();
+                            form.classList.add('was-validated');
+                            return false;
+                        }
+                    }, false);
+                });
+            })();
+        </script>
     </body>
 
 </html>

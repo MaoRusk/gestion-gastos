@@ -332,8 +332,8 @@ $balance_neto = $total_ingresos - $total_gastos;
                                                                         <i class="ri-more-fill align-middle"></i>
                                                                     </a>
                                                                     <ul class="dropdown-menu dropdown-menu-end">
-                                                                        <li><a class="dropdown-item" href="transaccion-ver.php?id=<?php echo (int)$transaccion['id']; ?>"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> Ver Detalles</a></li>
-                                                                        <li><a class="dropdown-item" href="transaccion-editar.php?id=<?php echo (int)$transaccion['id']; ?>"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
+                                                                        <li><a class="dropdown-item" href="transacciones-agregar.php?id=<?php echo (int)$transaccion['id']; ?>&amp;mode=view"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> Ver Detalles</a></li>
+                                                                        <li><a class="dropdown-item" href="transacciones-agregar.php?id=<?php echo (int)$transaccion['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
                                                                         <li>
                                                                             <form action="transaccion-eliminar.php" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar esta transacción?');">
                                                                                 <input type="hidden" name="id" value="<?php echo (int)$transaccion['id']; ?>">

@@ -9,13 +9,61 @@ require_once "includes/auth_functions.php";
 // Check if the user is logged in, if not then redirect him to login page
 requireAuth();
 
-// Define variables and initialize with empty values
-$nombre = $tipo = $color = $icono = $descripcion = "";
+// Mode handling: add (default), edit, view
+$mode = isset($_GET['mode']) ? $_GET['mode'] : 'add';
+$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$is_edit = ($mode === 'edit' && $id > 0);
+$is_view = ($mode === 'view' && $id > 0);
+
+// Define variables and initialize (preserve values when loaded from DB)
+$nombre = isset($nombre) ? $nombre : '';
+$tipo = isset($tipo) ? $tipo : '';
+$color = isset($color) ? $color : '';
+$icono = isset($icono) ? $icono : '';
+$descripcion = isset($descripcion) ? $descripcion : '';
 $nombre_err = $tipo_err = $color_err = $icono_err = "";
 $success_message = "";
 
+// If editing or viewing, load category and prefill
+if (($is_edit || $is_view) && $id > 0) {
+    $sql = "SELECT * FROM categorias WHERE id = ? LIMIT 1";
+    if ($stmt = mysqli_prepare($link, $sql)) {
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = mysqli_fetch_assoc($res);
+        mysqli_stmt_close($stmt);
+
+        if (!$row) {
+            header('Location: categorias-lista.php');
+            exit;
+        }
+
+        // Ownership check: predefinidas shouldn't be editable
+        if ($row['es_predefinida']) {
+            if ($is_edit) die('No puedes editar una categoría predefinida');
+            // viewing predefinida is allowed
+        }
+
+        if (!$row['es_predefinida'] && $row['usuario_id'] != getCurrentUserId()) {
+            die('No tienes permiso para ver/editar esta categoría');
+        }
+
+        // Prefill values
+        $nombre = $row['nombre'];
+        $tipo = $row['tipo'];
+        $color = $row['color'];
+        $icono = $row['icono'];
+        $descripcion = $row['descripcion'];
+    }
+}
+
 // Processing form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    // Determine if posting an edit or create
+    $post_mode = isset($_POST['mode']) ? $_POST['mode'] : 'add';
+    $post_id = isset($_POST['id']) ? intval($_POST['id']) : 0;
 
     // Validate nombre
     if (empty(trim($_POST["nombre"]))) {
@@ -48,31 +96,54 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Validate descripcion
     $descripcion = !empty($_POST["descripcion"]) ? sanitizeInput($_POST["descripcion"]) : null;
 
-    // Check input errors before inserting in database
+    // If no errors, proceed to insert or update
     if (empty($nombre_err) && empty($tipo_err) && empty($color_err) && empty($icono_err)) {
-        
         $user_id = getCurrentUserId();
-        
-        // Prepare an insert statement
-        $sql = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, descripcion, es_predefinida, activa) VALUES (?, ?, ?, ?, ?, ?, false, true)";
-        
-        if ($stmt = mysqli_prepare($link, $sql)) {
-            // Bind variables to the prepared statement as parameters
-            mysqli_stmt_bind_param($stmt, "isssss", $user_id, $nombre, $tipo, $color, $icono, $descripcion);
-            
-            // Attempt to execute the prepared statement
-            if (mysqli_stmt_execute($stmt)) {
-                $success_message = "Categoría creada exitosamente!";
-                
-                // Clear form
-                $nombre = $tipo = $color = $icono = $descripcion = "";
-                
-            } else {
-                $success_message = "Error: " . mysqli_error($link);
+
+        if ($post_mode === 'edit' && $post_id > 0) {
+            // Update existing category (ownership checked on GET, re-check here)
+            $check_sql = "SELECT usuario_id, es_predefinida FROM categorias WHERE id = ? LIMIT 1";
+            if ($cstmt = mysqli_prepare($link, $check_sql)) {
+                mysqli_stmt_bind_param($cstmt, 'i', $post_id);
+                mysqli_stmt_execute($cstmt);
+                $cres = mysqli_stmt_get_result($cstmt);
+                $crow = mysqli_fetch_assoc($cres);
+                mysqli_stmt_close($cstmt);
+
+                if (!$crow) {
+                    die('Categoría no encontrada');
+                }
+                if ($crow['es_predefinida']) {
+                    die('No puedes editar una categoría predefinida');
+                }
+                if ($crow['usuario_id'] != $user_id) {
+                    die('No tienes permiso para editar esta categoría');
+                }
             }
-            
-            // Close statement
-            mysqli_stmt_close($stmt);
+
+            $update_sql = "UPDATE categorias SET nombre = ?, tipo = ?, color = ?, icono = ?, descripcion = ? WHERE id = ?";
+            if ($ust = mysqli_prepare($link, $update_sql)) {
+                mysqli_stmt_bind_param($ust, 'ssssis', $nombre, $tipo, $color, $icono, $descripcion, $post_id);
+                if (mysqli_stmt_execute($ust)) {
+                    $success_message = "Categoría actualizada exitosamente!";
+                } else {
+                    $success_message = "Error al actualizar: " . mysqli_error($link);
+                }
+                mysqli_stmt_close($ust);
+            }
+        } else {
+            // Insert new category
+            $sql = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, descripcion, es_predefinida, activa) VALUES (?, ?, ?, ?, ?, ?, false, true)";
+            if ($stmt = mysqli_prepare($link, $sql)) {
+                mysqli_stmt_bind_param($stmt, "isssss", $user_id, $nombre, $tipo, $color, $icono, $descripcion);
+                if (mysqli_stmt_execute($stmt)) {
+                    $success_message = "Categoría creada exitosamente!";
+                    $nombre = $tipo = $color = $icono = $descripcion = "";
+                } else {
+                    $success_message = "Error: " . mysqli_error($link);
+                }
+                mysqli_stmt_close($stmt);
+            }
         }
     }
 }
@@ -171,19 +242,24 @@ $colores = [
                                         </div>
                                     <?php endif; ?>
                                     
+                                    <?php $read_only = ($is_view); ?>
                                     <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                        <?php if ($is_edit || $is_view): ?>
+                                            <input type="hidden" name="id" value="<?php echo (int)$id; ?>">
+                                            <input type="hidden" name="mode" value="<?php echo $is_edit ? 'edit' : 'view'; ?>">
+                                        <?php endif; ?>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($nombre_err)) ? 'has-error' : ''; ?>">
                                                     <label for="nombre" class="form-label">Nombre de la Categoría <span class="text-danger">*</span></label>
-                                                    <input type="text" class="form-control" id="nombre" name="nombre" value="<?php echo $nombre; ?>" placeholder="Ej: Supermercado">
+                                                    <input type="text" class="form-control" id="nombre" name="nombre" value="<?php echo $nombre; ?>" placeholder="Ej: Supermercado" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     <span class="text-danger"><?php echo $nombre_err; ?></span>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($tipo_err)) ? 'has-error' : ''; ?>">
                                                     <label for="tipo" class="form-label">Tipo <span class="text-danger">*</span></label>
-                                                    <select class="form-select" id="tipo" name="tipo">
+                                                    <select class="form-select" id="tipo" name="tipo" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                         <option value="">Seleccionar tipo</option>
                                                         <option value="ingreso" <?php echo ($tipo == 'ingreso') ? 'selected' : ''; ?>>Ingreso</option>
                                                         <option value="gasto" <?php echo ($tipo == 'gasto') ? 'selected' : ''; ?>>Gasto</option>
@@ -226,12 +302,14 @@ $colores = [
 
                                         <div class="mb-3">
                                             <label for="descripcion" class="form-label">Descripción</label>
-                                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" placeholder="Descripción opcional de la categoría"><?php echo $descripcion; ?></textarea>
+                                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" placeholder="Descripción opcional de la categoría" <?php echo $read_only ? 'disabled' : ''; ?>><?php echo $descripcion; ?></textarea>
                                         </div>
 
                                         <div class="text-end">
                                             <a href="categorias-lista.php" class="btn btn-light me-2">Cancelar</a>
-                                            <button type="submit" class="btn btn-primary">Crear Categoría</button>
+                                            <?php if (!$read_only): ?>
+                                                <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar categoría' : 'Crear Categoría'; ?></button>
+                                            <?php endif; ?>
                                         </div>
                                     </form>
                                 </div>

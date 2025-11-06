@@ -85,7 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <div class="text-center mt-sm-5 mb-4 text-white-50">
                                 <div>
                                     <a href="index.php" class="d-inline-block auth-logo">
-                                        <img src="assets/images/logo-light.png" alt="" height="20">
+                                        <img src="assets/images/fime.png" alt="" height="82">
                                     </a>
                                 </div>
                                 <p class="mt-3 fs-15 fw-medium">Sistema de Gestión de Gastos Personales</p>
@@ -93,19 +93,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         </div>
                     </div>
                     <!-- end row -->
-
                     <div class="row justify-content-center">
                         <div class="col-md-8 col-lg-6 col-xl-5">
                             <div class="card mt-4">
                             
                                 <div class="card-body p-4"> 
                                     <div class="text-center mt-2">
-                                        <h5 class="text-primary">¡Bienvenido de vuelta!</h5>
-                                        <p class="text-muted">Inicia sesión para continuar a tu panel de gastos.</p>
+                                        <!-- <h5 class="text-primary">¡Bienvenido de vuelta!</h5> -->
+                                        <!-- <p class="text-muted">Inicia sesión para continuar a tu panel de gastos.</p> -->
                                     </div>
                                     <div class="p-2 mt-4">
                                         <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
             
+                                            <?php if (!empty($_GET) && isset($_GET['registered']) && $_GET['registered'] == 1): ?>
+                                                <div class="alert alert-success" role="alert">
+                                                    Registro exitoso. Ya puedes iniciar sesión.
+                                                </div>
+                                            <?php endif; ?>
+
                                             <?php if (!empty($login_message)): ?>
                                                 <div class="alert alert-danger" role="alert">
                                                     <?php echo $login_message; ?>
@@ -130,10 +135,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                 </div>
                                             </div>
 
-                                            <div class="form-check">
+                                            <!-- <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" value="" id="auth-remember-check">
                                                 <label class="form-check-label" for="auth-remember-check">Recordarme</label>
-                                            </div>
+                                            </div> -->
                                             
                                             <div class="mt-4">
                                                 <button class="btn btn-success w-100" type="submit">Iniciar Sesión</button>
@@ -164,7 +169,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="row">
                         <div class="col-lg-12">
                             <div class="text-center">
-                                <p class="mb-0 text-muted">&copy; <script>document.write(new Date().getFullYear())</script> Velzon. Crafted with <i class="mdi mdi-heart text-danger"></i> by Themesbrand</p>
+                                <!-- <p class="mb-0 text-muted">&copy; <script>document.write(new Date().getFullYear())</script> Velzon. Crafted with <i class="mdi mdi-heart text-danger"></i> by Themesbrand</p> -->
                             </div>
                         </div>
                     </div>

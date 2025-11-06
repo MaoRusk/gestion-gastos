@@ -294,8 +294,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['toggle_user'])) {
     </div>
     <!-- END layout-wrapper -->
 
-    <?php include 'layouts/customizer.php'; ?>
-
     <?php include 'layouts/vendor-scripts.php'; ?>
 
     <script>

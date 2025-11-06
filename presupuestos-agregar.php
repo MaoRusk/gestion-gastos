@@ -9,14 +9,29 @@ require_once "includes/auth_functions.php";
 // Check if the user is logged in, if not then redirect him to login page
 requireAuth();
 
-// Define variables and initialize with empty values
-$nombre = $monto_limite = $categoria_id = $fecha_inicio = $fecha_fin = $descripcion = "";
+// Mode handling: add (default), edit, view
+$mode = isset($_GET['mode']) ? $_GET['mode'] : 'add';
+$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$is_edit = ($mode === 'edit' && $id > 0);
+$is_view = ($mode === 'view' && $id > 0);
+
+// Define variables and initialize (preserve prefilled values when loading existing)
+$nombre = isset($nombre) ? $nombre : '';
+$monto_limite = isset($monto_limite) ? $monto_limite : '';
+$categoria_id = isset($categoria_id) ? $categoria_id : '';
+$fecha_inicio = isset($fecha_inicio) ? $fecha_inicio : '';
+$fecha_fin = isset($fecha_fin) ? $fecha_fin : '';
+$descripcion = isset($descripcion) ? $descripcion : '';
 $nombre_err = $monto_limite_err = $categoria_err = $fecha_inicio_err = $fecha_fin_err = "";
 $success_message = "";
 
-// Get user's expense categories
+// Make category query DB-aware (es_predefinida / activa) for compatibility
+$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
+$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
+
+// Re-run categories query (replace earlier non-DB-aware sql)
 $user_id = getCurrentUserId();
-$sql_categories = "SELECT id, nombre, color, icono FROM categorias WHERE (usuario_id = ? OR es_predefinida = TRUE) AND activa = TRUE AND tipo = 'gasto' ORDER BY nombre";
+$sql_categories = "SELECT id, nombre, color, icono FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition . " AND tipo = 'gasto' ORDER BY nombre";
 $stmt = mysqli_prepare($link, $sql_categories);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -24,8 +39,40 @@ $result = mysqli_stmt_get_result($stmt);
 $categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
+// If editing or viewing, load existing presupuesto to prefill
+if (($is_edit || $is_view) && $id > 0) {
+    $sql = "SELECT * FROM presupuestos WHERE id = ? LIMIT 1";
+    if ($stmt = mysqli_prepare($link, $sql)) {
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = mysqli_fetch_assoc($res);
+        mysqli_stmt_close($stmt);
+
+        if (!$row) {
+            header('Location: presupuestos-lista.php');
+            exit;
+        }
+
+        if ($row['usuario_id'] != $user_id) {
+            die('No tienes permiso para ver/editar este presupuesto');
+        }
+
+        $nombre = $row['nombre'];
+        $monto_limite = $row['monto_limite'];
+        $categoria_id = $row['categoria_id'];
+        $fecha_inicio = $row['fecha_inicio'];
+        $fecha_fin = $row['fecha_fin'];
+        $descripcion = $row['descripcion'];
+    }
+}
+
 // Processing form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    // Determine post mode
+    $post_mode = isset($_POST['mode']) ? $_POST['mode'] : 'add';
+    $post_id = isset($_POST['id']) ? intval($_POST['id']) : 0;
 
     // Validate nombre
     if (empty(trim($_POST["nombre"]))) {
@@ -70,29 +117,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Validate descripcion
     $descripcion = !empty($_POST["descripcion"]) ? sanitizeInput($_POST["descripcion"]) : null;
 
-    // Check input errors before inserting in database
+    // Check input errors before inserting/updating in database
     if (empty($nombre_err) && empty($monto_limite_err) && empty($categoria_err) && empty($fecha_inicio_err) && empty($fecha_fin_err)) {
-        
-        // Prepare an insert statement
-        $sql = "INSERT INTO presupuestos (usuario_id, nombre, monto_limite, categoria_id, fecha_inicio, fecha_fin, descripcion, activo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)";
-        
-        if ($stmt = mysqli_prepare($link, $sql)) {
-            // Bind variables to the prepared statement as parameters
-            mysqli_stmt_bind_param($stmt, "isdisss", $user_id, $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion);
-            
-            // Attempt to execute the prepared statement
-            if (mysqli_stmt_execute($stmt)) {
-                $success_message = "Presupuesto creado exitosamente!";
-                
-                // Clear form
-                $nombre = $monto_limite = $categoria_id = $fecha_inicio = $fecha_fin = $descripcion = "";
-                
-            } else {
-                $success_message = "Error: " . mysqli_error($link);
+        $user_id = getCurrentUserId();
+
+        if ($post_mode === 'edit' && $post_id > 0) {
+            // Re-check ownership
+            $check_sql = "SELECT usuario_id FROM presupuestos WHERE id = ? LIMIT 1";
+            if ($cstmt = mysqli_prepare($link, $check_sql)) {
+                mysqli_stmt_bind_param($cstmt, 'i', $post_id);
+                mysqli_stmt_execute($cstmt);
+                $cres = mysqli_stmt_get_result($cstmt);
+                $crow = mysqli_fetch_assoc($cres);
+                mysqli_stmt_close($cstmt);
+
+                if (!$crow || $crow['usuario_id'] != $user_id) {
+                    die('No tienes permiso para editar este presupuesto');
+                }
             }
-            
-            // Close statement
-            mysqli_stmt_close($stmt);
+
+            $update_sql = "UPDATE presupuestos SET nombre = ?, monto_limite = ?, categoria_id = ?, fecha_inicio = ?, fecha_fin = ?, descripcion = ? WHERE id = ?";
+            if ($ust = mysqli_prepare($link, $update_sql)) {
+                mysqli_stmt_bind_param($ust, 'sdisssi', $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion, $post_id);
+                if (mysqli_stmt_execute($ust)) {
+                    $success_message = "Presupuesto actualizado exitosamente!";
+                } else {
+                    $success_message = "Error al actualizar: " . mysqli_error($link);
+                }
+                mysqli_stmt_close($ust);
+            }
+
+        } else {
+            // Insert new budget
+            $sql = "INSERT INTO presupuestos (usuario_id, nombre, monto_limite, categoria_id, fecha_inicio, fecha_fin, descripcion, activo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)";
+
+            if ($stmt = mysqli_prepare($link, $sql)) {
+                mysqli_stmt_bind_param($stmt, "isdisss", $user_id, $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion);
+                if (mysqli_stmt_execute($stmt)) {
+                    $success_message = "Presupuesto creado exitosamente!";
+                    $nombre = $monto_limite = $categoria_id = $fecha_inicio = $fecha_fin = $descripcion = "";
+                } else {
+                    $success_message = "Error: " . mysqli_error($link);
+                }
+                mysqli_stmt_close($stmt);
+            }
         }
     }
 }

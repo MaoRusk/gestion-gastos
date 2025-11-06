@@ -339,10 +339,10 @@ requireAuth();
                                         <a href="cuentas-agregar.php" class="btn btn-outline-primary">
                                             <i class="ri-bank-line align-middle me-1"></i> Agregar Cuenta
                                         </a>
-                                        <a href="presupuestos-crear.php" class="btn btn-outline-success">
+                                        <a href="presupuestos-agregar.php" class="btn btn-outline-success">
                                             <i class="ri-money-dollar-circle-line align-middle me-1"></i> Crear Presupuesto
                                         </a>
-                                        <a href="reportes-mensual.php" class="btn btn-outline-info">
+                                        <a href="reportes.php" class="btn btn-outline-info">
                                             <i class="ri-bar-chart-line align-middle me-1"></i> Ver Reportes
                                         </a>
                                     </div>
