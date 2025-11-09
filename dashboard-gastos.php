@@ -11,10 +11,21 @@ requireAuth();
 
 $user_id = getCurrentUserId();
 
+// Detectar tipo de base de datos para compatibilidad
+$isSqlite = isset($link->type) && $link->type === 'sqlite';
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+$isMysql = isset($link->type) && $link->type === 'mysql';
+
+// Condición para activa según el tipo de BD
+$activaCondition = $isPostgres ? 'activa = TRUE' : 'activa = 1';
+
+// Fecha inicio del mes actual (compatible con todas las BD)
+$fecha_inicio_mes = date('Y-m-01');
+
 // 1. Balance Total (Suma de balances de todas las cuentas activas)
-$sql_balance = "SELECT SUM(balance_actual) as balance_total 
+$sql_balance = "SELECT COALESCE(SUM(balance_actual), 0) as balance_total 
                FROM cuentas_bancarias 
-               WHERE usuario_id = ? AND activa = true";
+               WHERE usuario_id = ? AND " . $activaCondition;
 
 $stmt_balance = mysqli_prepare($link, $sql_balance);
 mysqli_stmt_bind_param($stmt_balance, "i", $user_id);
@@ -22,52 +33,161 @@ mysqli_stmt_execute($stmt_balance);
 
 $result_balance = mysqli_stmt_get_result($stmt_balance);
 $balance_data = mysqli_fetch_assoc($result_balance);
-$balance_total = $balance_data['balance_total'] ?? 0;
+$balance_total = floatval($balance_data['balance_total'] ?? 0);
 mysqli_stmt_close($stmt_balance);
 
-// 2. Ingresos del mes actual - CORREGIDO para PostgreSQL
+// 2. Ingresos del mes actual (compatible con todas las BD)
 $sql_ingresos = "SELECT COALESCE(SUM(monto), 0) as total_ingresos 
                 FROM transacciones 
                 WHERE usuario_id = ? 
                 AND tipo = 'ingreso' 
-                AND fecha >= DATE_TRUNC('month', CURRENT_DATE)
-                AND activa = true";
+                AND fecha >= ?
+                AND " . $activaCondition;
 
 $stmt_ingresos = mysqli_prepare($link, $sql_ingresos);
-mysqli_stmt_bind_param($stmt_ingresos, "i", $user_id);
+mysqli_stmt_bind_param($stmt_ingresos, "is", $user_id, $fecha_inicio_mes);
 mysqli_stmt_execute($stmt_ingresos);
 
 $result_ingresos = mysqli_stmt_get_result($stmt_ingresos);
 $ingresos_data = mysqli_fetch_assoc($result_ingresos);
-$total_ingresos = $ingresos_data['total_ingresos'] ?? 0;
+$total_ingresos = floatval($ingresos_data['total_ingresos'] ?? 0);
 mysqli_stmt_close($stmt_ingresos);
 
-// 3. Gastos del mes actual - CORREGIDO para PostgreSQL
+// 3. Gastos del mes actual (compatible con todas las BD)
 $sql_gastos = "SELECT COALESCE(SUM(monto), 0) as total_gastos 
               FROM transacciones 
               WHERE usuario_id = ? 
               AND tipo = 'gasto' 
-              AND fecha >= DATE_TRUNC('month', CURRENT_DATE)
-              AND activa = true";
+              AND fecha >= ?
+              AND " . $activaCondition;
 
 $stmt_gastos = mysqli_prepare($link, $sql_gastos);
-mysqli_stmt_bind_param($stmt_gastos, "i", $user_id);
+mysqli_stmt_bind_param($stmt_gastos, "is", $user_id, $fecha_inicio_mes);
 mysqli_stmt_execute($stmt_gastos);
 
 $result_gastos = mysqli_stmt_get_result($stmt_gastos);
 $gastos_data = mysqli_fetch_assoc($result_gastos);
-$total_gastos = $gastos_data['total_gastos'] ?? 0;
+$total_gastos = floatval($gastos_data['total_gastos'] ?? 0);
 mysqli_stmt_close($stmt_gastos);
 
 // 4. Ahorro del mes (Ingresos - Gastos)
 $ahorro_mes = $total_ingresos - $total_gastos;
 
-// 5. Transacciones recientes (últimas 5)
+// 5. Ingresos y gastos de los últimos 6 meses para la gráfica
+$six_months_ago = date('Y-m-01', strtotime('-5 months')); // 6 meses incluyendo el actual
+
+// Función para agrupar por mes según el tipo de BD
+if ($isSqlite) {
+    $groupExpr = "strftime('%Y-%m', fecha)";
+} elseif ($isPostgres) {
+    $groupExpr = "to_char(fecha, 'YYYY-MM')";
+} else {
+    $groupExpr = "DATE_FORMAT(fecha, '%Y-%m')";
+}
+
+$sql_ingresos_meses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(monto), 0) as total
+                      FROM transacciones 
+                      WHERE usuario_id = ? 
+                      AND tipo = 'ingreso' 
+                      AND fecha >= ?
+                      AND " . $activaCondition . "
+                      GROUP BY mes
+                      ORDER BY mes";
+
+$stmt_ingresos_meses = mysqli_prepare($link, $sql_ingresos_meses);
+mysqli_stmt_bind_param($stmt_ingresos_meses, "is", $user_id, $six_months_ago);
+mysqli_stmt_execute($stmt_ingresos_meses);
+
+$result_ingresos_meses = mysqli_stmt_get_result($stmt_ingresos_meses);
+$ingresos_por_mes = [];
+while ($row = mysqli_fetch_assoc($result_ingresos_meses)) {
+    $ingresos_por_mes[$row['mes']] = floatval($row['total']);
+}
+mysqli_stmt_close($stmt_ingresos_meses);
+
+$sql_gastos_meses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(monto), 0) as total
+                    FROM transacciones 
+                    WHERE usuario_id = ? 
+                    AND tipo = 'gasto' 
+                    AND fecha >= ?
+                    AND " . $activaCondition . "
+                    GROUP BY mes
+                    ORDER BY mes";
+
+$stmt_gastos_meses = mysqli_prepare($link, $sql_gastos_meses);
+mysqli_stmt_bind_param($stmt_gastos_meses, "is", $user_id, $six_months_ago);
+mysqli_stmt_execute($stmt_gastos_meses);
+
+$result_gastos_meses = mysqli_stmt_get_result($stmt_gastos_meses);
+$gastos_por_mes = [];
+while ($row = mysqli_fetch_assoc($result_gastos_meses)) {
+    $gastos_por_mes[$row['mes']] = floatval($row['total']);
+}
+mysqli_stmt_close($stmt_gastos_meses);
+
+// Generar array de los últimos 6 meses con datos
+$meses_labels = [];
+$ingresos_data_chart = [];
+$gastos_data_chart = [];
+$meses_nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+for ($i = 5; $i >= 0; $i--) {
+    $fecha_mes = date('Y-m-01', strtotime("-$i months"));
+    $mes_key = date('Y-m', strtotime("-$i months"));
+    $mes_nombre = $meses_nombres[date('n', strtotime("-$i months")) - 1];
+    
+    $meses_labels[] = $mes_nombre;
+    $ingresos_data_chart[] = isset($ingresos_por_mes[$mes_key]) ? $ingresos_por_mes[$mes_key] : 0;
+    $gastos_data_chart[] = isset($gastos_por_mes[$mes_key]) ? $gastos_por_mes[$mes_key] : 0;
+}
+
+// 6. Gastos por categoría para la gráfica de donut
+$sql_gastos_categoria = "SELECT c.nombre, c.color, COALESCE(SUM(t.monto), 0) as total
+                         FROM transacciones t
+                         INNER JOIN categorias c ON t.categoria_id = c.id
+                         WHERE t.usuario_id = ? 
+                         AND t.tipo = 'gasto' 
+                         AND t.fecha >= ?
+                         AND t." . $activaCondition . "
+                         AND c." . $activaCondition . "
+                         GROUP BY c.id, c.nombre, c.color
+                         ORDER BY total DESC
+                         LIMIT 10";
+
+$stmt_gastos_categoria = mysqli_prepare($link, $sql_gastos_categoria);
+mysqli_stmt_bind_param($stmt_gastos_categoria, "is", $user_id, $six_months_ago);
+mysqli_stmt_execute($stmt_gastos_categoria);
+
+$result_gastos_categoria = mysqli_stmt_get_result($stmt_gastos_categoria);
+$gastos_por_categoria = [];
+$total_gastos_categorias = 0;
+while ($row = mysqli_fetch_assoc($result_gastos_categoria)) {
+    $gastos_por_categoria[] = [
+        'nombre' => $row['nombre'],
+        'total' => floatval($row['total']),
+        'color' => $row['color'] ?: '#405189'
+    ];
+    $total_gastos_categorias += floatval($row['total']);
+}
+mysqli_stmt_close($stmt_gastos_categoria);
+
+// Calcular porcentajes para la gráfica
+$gastos_categoria_labels = [];
+$gastos_categoria_data = [];
+$gastos_categoria_colors = [];
+foreach ($gastos_por_categoria as $cat) {
+    $gastos_categoria_labels[] = $cat['nombre'];
+    $porcentaje = $total_gastos_categorias > 0 ? ($cat['total'] / $total_gastos_categorias * 100) : 0;
+    $gastos_categoria_data[] = round($porcentaje, 1);
+    $gastos_categoria_colors[] = $cat['color'];
+}
+
+// 7. Transacciones recientes (últimas 5)
 $sql_transacciones = "SELECT t.descripcion, t.monto, t.tipo, t.fecha, c.nombre as categoria_nombre
                      FROM transacciones t
                      LEFT JOIN categorias c ON t.categoria_id = c.id
                      WHERE t.usuario_id = ? 
-                     AND t.activa = true
+                     AND t." . $activaCondition . "
                      ORDER BY t.fecha DESC, t.id DESC 
                      LIMIT 5";
 
@@ -78,22 +198,6 @@ mysqli_stmt_execute($stmt_transacciones);
 $result_transacciones = mysqli_stmt_get_result($stmt_transacciones);
 $transacciones = mysqli_fetch_all($result_transacciones, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt_transacciones);
-
-// 6. Metas de ahorro activas
-$sql_metas = "SELECT nombre, monto_objetivo, monto_actual 
-             FROM metas_ahorro 
-             WHERE usuario_id = ? 
-             AND activa = true 
-             ORDER BY fecha_creacion DESC 
-             LIMIT 3";
-
-$stmt_metas = mysqli_prepare($link, $sql_metas);
-mysqli_stmt_bind_param($stmt_metas, "i", $user_id);
-mysqli_stmt_execute($stmt_metas);
-
-$result_metas = mysqli_stmt_get_result($stmt_metas);
-$metas = mysqli_fetch_all($result_metas, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt_metas);
 
 // Función para formatear moneda
 function formatCurrency($amount) {
@@ -153,16 +257,15 @@ function formatCurrency($amount) {
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-primary fs-14 mb-0">
-                                                <!-- <i class="ri-arrow-right-up-line fs-13 align-middle"></i> +$12,350 -->
-                                                <i class="ri-arrow-right-up-line fs-13 align-middle"></i> <?php echo number_format($balance_total, 2); ?>
+                                                <i class="ri-arrow-right-up-line fs-13 align-middle"></i> Balance
                                             </h5>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
-                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$45,678</h4>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4"><?php echo formatCurrency($balance_total); ?></h4>
                                             <span class="badge bg-success-subtle text-primary mb-0">
-                                                <i class="ri-arrow-up-line align-middle"></i> +2.4%
+                                                <i class="ri-money-dollar-circle-line align-middle"></i> Total
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
@@ -184,15 +287,15 @@ function formatCurrency($amount) {
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-success fs-14 mb-0">
-                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> +$2,500
+                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> Mes Actual
                                             </h5>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
-                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$8,500</h4>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4"><?php echo formatCurrency($total_ingresos); ?></h4>
                                             <span class="badge bg-soft-success text-success mb-0">
-                                                <i class="ri-arrow-up-line align-middle"></i> +15.2%
+                                                <i class="ri-arrow-up-line align-middle"></i> Ingresos
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
@@ -214,15 +317,15 @@ function formatCurrency($amount) {
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-danger fs-14 mb-0">
-                                                <i class="ri-arrow-down-line fs-13 align-middle"></i> -$1,200
+                                                <i class="ri-arrow-down-line fs-13 align-middle"></i> Mes Actual
                                             </h5>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
-                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$3,200</h4>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4"><?php echo formatCurrency($total_gastos); ?></h4>
                                             <span class="badge bg-soft-success text-danger mb-0">
-                                                <i class="ri-arrow-down-line align-middle"></i> -8.1%
+                                                <i class="ri-arrow-down-line align-middle"></i> Gastos
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
@@ -244,15 +347,15 @@ function formatCurrency($amount) {
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-success fs-14 mb-0">
-                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> +$1,300
+                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> <?php echo $ahorro_mes >= 0 ? '+' : ''; ?><?php echo formatCurrency($ahorro_mes); ?>
                                             </h5>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
-                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$5,300</h4>
-                                            <span class="badge bg-soft-success text-success mb-0">
-                                                <i class="ri-arrow-up-line align-middle"></i> +32.5%
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4"><?php echo formatCurrency($ahorro_mes); ?></h4>
+                                            <span class="badge bg-soft-success <?php echo $ahorro_mes >= 0 ? 'text-success' : 'text-danger'; ?> mb-0">
+                                                <i class="ri-arrow-<?php echo $ahorro_mes >= 0 ? 'up' : 'down'; ?>-line align-middle"></i> <?php echo $ahorro_mes >= 0 ? 'Ahorro' : 'Déficit'; ?>
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">
@@ -330,86 +433,43 @@ function formatCurrency($amount) {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="flex-shrink-0 me-2">
-                                                                <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-soft-success text-success rounded">
-                                                                        <i class="ri-arrow-up-line"></i>
-                                                                    </span>
+                                                <?php if (empty($transacciones)): ?>
+                                                    <tr>
+                                                        <td colspan="5" class="text-center text-muted py-4">
+                                                            <i class="ri-inbox-line fs-3 d-block mb-2"></i>
+                                                            No hay transacciones recientes
+                                                        </td>
+                                                    </tr>
+                                                <?php else: ?>
+                                                    <?php foreach ($transacciones as $trans): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <div class="d-flex align-items-center">
+                                                                    <div class="flex-shrink-0 me-2">
+                                                                        <div class="avatar-xs">
+                                                                            <span class="avatar-title <?php echo $trans['tipo'] === 'ingreso' ? 'bg-soft-success text-success' : 'bg-soft-danger text-danger'; ?> rounded">
+                                                                                <i class="ri-arrow-<?php echo $trans['tipo'] === 'ingreso' ? 'up' : 'down'; ?>-line"></i>
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="flex-grow-1">
+                                                                        <h6 class="mb-0"><?php echo htmlspecialchars($trans['descripcion']); ?></h6>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                            <div class="flex-grow-1">
-                                                                <h6 class="mb-0">Salario</h6>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>Ingresos</td>
-                                                    <td><span class="badge bg-success-subtle text-success">Ingreso</span></td>
-                                                    <td class="text-success fw-semibold">+$8,500</td>
-                                                    <td>15 Nov 2024</td>
-                                                </tr>
-                                                <tr>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="flex-shrink-0 me-2">
-                                                                <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-soft-danger text-danger rounded">
-                                                                        <i class="ri-arrow-down-line"></i>
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex-grow-1">
-                                                                <h6 class="mb-0">Supermercado</h6>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>Alimentación</td>
-                                                    <td><span class="badge bg-danger-subtle text-danger">Gasto</span></td>
-                                                    <td class="text-danger fw-semibold">-$450</td>
-                                                    <td>14 Nov 2024</td>
-                                                </tr>
-                                                <tr>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="flex-shrink-0 me-2">
-                                                                <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-soft-danger text-danger rounded">
-                                                                        <i class="ri-arrow-down-line"></i>
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex-grow-1">
-                                                                <h6 class="mb-0">Transporte</h6>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>Transporte</td>
-                                                    <td><span class="badge bg-danger-subtle text-danger">Gasto</span></td>
-                                                    <td class="text-danger fw-semibold">-$120</td>
-                                                    <td>13 Nov 2024</td>
-                                                </tr>
-                                                <tr>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="flex-shrink-0 me-2">
-                                                                <div class="avatar-xs">
-                                                                    <span class="avatar-title bg-soft-danger text-danger rounded">
-                                                                        <i class="ri-arrow-down-line"></i>
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex-grow-1">
-                                                                <h6 class="mb-0">Renta</h6>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>Vivienda</td>
-                                                    <td><span class="badge bg-danger-subtle text-danger">Gasto</span></td>
-                                                    <td class="text-danger fw-semibold">-$2,000</td>
-                                                    <td>12 Nov 2024</td>
-                                                </tr>
+                                                            </td>
+                                                            <td><?php echo htmlspecialchars($trans['categoria_nombre'] ?? 'Sin categoría'); ?></td>
+                                                            <td>
+                                                                <span class="badge <?php echo $trans['tipo'] === 'ingreso' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?>">
+                                                                    <?php echo ucfirst($trans['tipo']); ?>
+                                                                </span>
+                                                            </td>
+                                                            <td class="<?php echo $trans['tipo'] === 'ingreso' ? 'text-success' : 'text-danger'; ?> fw-semibold">
+                                                                <?php echo $trans['tipo'] === 'ingreso' ? '+' : '-'; ?><?php echo formatCurrency($trans['monto']); ?>
+                                                            </td>
+                                                            <td><?php echo date('d M Y', strtotime($trans['fecha'])); ?></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
                                             </tbody>
                                         </table>
                                     </div>
@@ -440,42 +500,6 @@ function formatCurrency($amount) {
                                     </div>
                                 </div>
                             </div>
-
-                            <!-- Metas de Ahorro -->
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="card-title mb-0">Metas de Ahorro</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="text-muted">Vacaciones</span>
-                                            <span class="text-muted">$2,500 / $5,000</span>
-                                        </div>
-                                        <div class="progress" style="height: 6px;">
-                                            <div class="progress-bar bg-primary" role="progressbar" style="width: 50%"></div>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="text-muted">Laptop Nueva</span>
-                                            <span class="text-muted">$800 / $1,500</span>
-                                        </div>
-                                        <div class="progress" style="height: 6px;">
-                                            <div class="progress-bar bg-success" role="progressbar" style="width: 53%"></div>
-                                        </div>
-                                    </div>
-                                    <div class="mb-0">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <span class="text-muted">Fondo de Emergencia</span>
-                                            <span class="text-muted">$1,200 / $3,000</span>
-                                        </div>
-                                        <div class="progress" style="height: 6px;">
-                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 40%"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -498,6 +522,21 @@ function formatCurrency($amount) {
 
     <!-- apexcharts -->
     <script src="assets/libs/apexcharts/apexcharts.min.js"></script>
+
+    <!-- Dashboard data from PHP -->
+    <script>
+        // Pasar datos de PHP a JavaScript para las gráficas
+        var dashboardData = {
+            meses: <?php echo json_encode($meses_labels); ?>,
+            ingresos: <?php echo json_encode($ingresos_data_chart); ?>,
+            gastos: <?php echo json_encode($gastos_data_chart); ?>,
+            gastosCategoria: {
+                labels: <?php echo json_encode($gastos_categoria_labels); ?>,
+                data: <?php echo json_encode($gastos_categoria_data); ?>,
+                colors: <?php echo json_encode($gastos_categoria_colors); ?>
+            }
+        };
+    </script>
 
     <!-- Dashboard init -->
     <script src="assets/js/pages/dashboard-gastos.init.js"></script>

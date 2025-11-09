@@ -3,13 +3,18 @@
  */
 
 // Line Chart - Ingresos vs Gastos
+// Usar datos reales de dashboardData si están disponibles, sino usar datos por defecto
+var ingresosData = (typeof dashboardData !== 'undefined' && dashboardData.ingresos) ? dashboardData.ingresos : [0, 0, 0, 0, 0, 0];
+var gastosData = (typeof dashboardData !== 'undefined' && dashboardData.gastos) ? dashboardData.gastos : [0, 0, 0, 0, 0, 0];
+var mesesData = (typeof dashboardData !== 'undefined' && dashboardData.meses) ? dashboardData.meses : ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+
 var lineChartOptions = {
     series: [{
         name: 'Ingresos',
-        data: [6500, 7200, 6800, 7500, 8200, 8500]
+        data: ingresosData
     }, {
         name: 'Gastos',
-        data: [3200, 3800, 3500, 4200, 3800, 3200]
+        data: gastosData
     }],
     chart: {
         height: 350,
@@ -24,7 +29,7 @@ var lineChartOptions = {
         width: 3
     },
     xaxis: {
-        categories: ['Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov']
+        categories: mesesData
     },
     yaxis: {
         labels: {
@@ -53,14 +58,33 @@ var lineChart = new ApexCharts(document.querySelector("#line_chart_basic"), line
 lineChart.render();
 
 // Donut Chart - Gastos por Categoría
+// Usar datos reales de dashboardData si están disponibles, sino usar datos por defecto
+var categoriaLabels = (typeof dashboardData !== 'undefined' && dashboardData.gastosCategoria && dashboardData.gastosCategoria.labels) 
+    ? dashboardData.gastosCategoria.labels 
+    : ['Sin datos'];
+var categoriaData = (typeof dashboardData !== 'undefined' && dashboardData.gastosCategoria && dashboardData.gastosCategoria.data) 
+    ? dashboardData.gastosCategoria.data 
+    : [100];
+var categoriaColors = (typeof dashboardData !== 'undefined' && dashboardData.gastosCategoria && dashboardData.gastosCategoria.colors) 
+    ? dashboardData.gastosCategoria.colors 
+    : ['#405189', '#0ab39c', '#f7b84b', '#f06548', '#299cdb'];
+
+// Si no hay datos, usar colores por defecto
+if (categoriaColors.length < categoriaData.length) {
+    var defaultColors = ['#405189', '#0ab39c', '#f7b84b', '#f06548', '#299cdb', '#51d28c', '#f7b84b', '#f06548', '#299cdb', '#e83e8c'];
+    for (var i = categoriaColors.length; i < categoriaData.length; i++) {
+        categoriaColors.push(defaultColors[i % defaultColors.length]);
+    }
+}
+
 var donutChartOptions = {
-    series: [35, 25, 20, 12, 8],
+    series: categoriaData,
     chart: {
         type: 'donut',
         height: 300
     },
-    labels: ['Alimentación', 'Transporte', 'Vivienda', 'Entretenimiento', 'Otros'],
-    colors: ['#405189', '#0ab39c', '#f7b84b', '#f06548', '#299cdb'],
+    labels: categoriaLabels,
+    colors: categoriaColors,
     legend: {
         position: 'bottom',
         horizontalAlign: 'center'

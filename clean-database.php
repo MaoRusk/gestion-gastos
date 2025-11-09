@@ -78,7 +78,6 @@ header('Content-Type: text/html; charset=utf-8');
                         'transacciones',      // Depende de usuarios, cuentas_bancarias, categorias
                         'transferencias',      // Depende de usuarios, cuentas_bancarias
                         'presupuestos',       // Depende de usuarios, categorias
-                        'metas_ahorro',       // Depende de usuarios
                         'cuentas_bancarias',  // Depende de usuarios
                         'categorias',         // Depende de usuarios
                         'usuarios',           // Tabla base
