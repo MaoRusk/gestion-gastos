@@ -137,48 +137,6 @@
                 </li>
                 <?php endif; ?>
 
-                <!-- Configuración del Sistema -->
-                <!-- <li class="nav-item">
-                    <a class="nav-link menu-link" href="#sidebarConfig" data-bs-toggle="collapse" role="button"
-                        aria-expanded="false" aria-controls="sidebarConfig">
-                        <i class="ri-settings-3-line"></i> <span>Configuración</span>
-                    </a>
-                    <div class="collapse menu-dropdown" id="sidebarConfig">
-                        <ul class="nav nav-sm flex-column">
-                            <li class="nav-item">
-                                <a href="pages-profile-settings.php" class="nav-link">Mi Perfil</a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="pages-profile.php" class="nav-link">Configuración</a>
-                            </li>
-                        </ul>
-                    </div>
-                </li> -->
-
-                <li class="menu-title"><i class="ri-more-fill"></i> <span>Acciones Rápidas</span></li>
-
-                <!-- Nueva Transacción Rápida -->
-                <li class="nav-item">
-                    <a class="nav-link menu-link" href="transacciones-agregar.php">
-                        <i class="ri-add-circle-line"></i> <span>Nueva Transacción</span>
-                    </a>
-                </li>
-
-                <!-- Nueva Cuenta Rápida -->
-                <li class="nav-item">
-                    <a class="nav-link menu-link" href="cuentas-agregar.php">
-                        <i class="ri-bank-line"></i> <span>Nueva Cuenta</span>
-                    </a>
-                </li>
-
-                <!-- <li class="menu-title"><i class="ri-more-fill"></i> <span>Acciones</span></li>
-
-                <li class="nav-item">
-                    <a class="nav-link menu-link" href="logout.php">
-                        <i class="ri-logout-box-line"></i> <span>Cerrar Sesión</span>
-                    </a>
-                </li> -->
-
             </ul>
         </div>
         <!-- Sidebar -->

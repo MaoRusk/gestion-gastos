@@ -87,6 +87,24 @@ foreach ($categorias as $categoria) {
                                     </div>
                                 </div>
                                 <div class="card-body">
+                                    <?php if (isset($_SESSION['success_message'])): ?>
+                                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                            <i class="ri-check-line me-2"></i>
+                                            <?php echo htmlspecialchars($_SESSION['success_message']); ?>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        <?php unset($_SESSION['success_message']); ?>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (isset($_SESSION['error_message'])): ?>
+                                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                            <i class="ri-error-warning-line me-2"></i>
+                                            <?php echo htmlspecialchars($_SESSION['error_message']); ?>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        <?php unset($_SESSION['error_message']); ?>
+                                    <?php endif; ?>
+                                    
                                     <?php foreach ($categorias_por_tipo as $tipo => $categorias_tipo): ?>
                                         <div class="mb-4">
                                             <h6 class="text-uppercase fw-semibold text-muted mb-3">
@@ -121,7 +139,7 @@ foreach ($categorias as $categoria) {
                                                                                         <?php if (!$categoria['es_predefinida']): ?>
                                                                                             <li><a class="dropdown-item" href="categorias-agregar.php?id=<?php echo $categoria['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
                                                                                             <li>
-                                                                                                <form action="categorias-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que quieres eliminar esta categoría?');" style="margin:0;padding:0;">
+                                                                                                <form action="categorias-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que deseas eliminar la categoría \'<?php echo htmlspecialchars(addslashes($categoria['nombre'])); ?>\'?\n\nLa categoría se ocultará pero las transacciones asociadas se conservarán. Esta acción no se puede deshacer.');" style="margin:0;padding:0;">
                                                                                                     <input type="hidden" name="id" value="<?php echo (int)$categoria['id']; ?>">
                                                                                                     <button type="submit" class="dropdown-item text-danger"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</button>
                                                                                                 </form>
@@ -168,15 +186,6 @@ foreach ($categorias as $categoria) {
     <!-- END layout-wrapper -->
 
     <?php include 'layouts/vendor-scripts.php'; ?>
-
-    <script>
-        function eliminarCategoria(id) {
-            if (confirm('¿Estás seguro de que quieres eliminar esta categoría?')) {
-                // Aquí iría la lógica para eliminar la categoría
-                console.log('Eliminar categoría:', id);
-            }
-        }
-    </script>
 
     <!-- App js -->
     <script src="assets/js/app.js"></script>

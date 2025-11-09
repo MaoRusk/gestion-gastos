@@ -106,6 +106,19 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                             </h5>
                                         </div>
                                     </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($total_presupuesto, 2); ?></h4>
+                                            <span class="badge bg-primary-subtle text-primary mb-0">
+                                                <i class="ri-wallet-line align-middle"></i> Total
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-primary rounded fs-3">
+                                                <i class="ri-wallet-line text-primary"></i>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -120,6 +133,19 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                             <h5 class="text-warning fs-14 mb-0">
                                                 <i class="ri-money-dollar-circle-line fs-13 align-middle"></i> $<?php echo number_format($total_gastado, 2); ?>
                                             </h5>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($total_gastado, 2); ?></h4>
+                                            <span class="badge bg-warning-subtle text-warning mb-0">
+                                                <i class="ri-money-dollar-circle-line align-middle"></i> Gastado
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-warning rounded fs-3">
+                                                <i class="ri-money-dollar-circle-line text-warning"></i>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -138,6 +164,19 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                             </h5>
                                         </div>
                                     </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($total_presupuesto - $total_gastado, 2); ?></h4>
+                                            <span class="badge <?php echo ($total_presupuesto - $total_gastado) >= 0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?> mb-0">
+                                                <i class="ri-<?php echo ($total_presupuesto - $total_gastado) >= 0 ? 'arrow-up' : 'arrow-down'; ?>-line align-middle"></i> <?php echo ($total_presupuesto - $total_gastado) >= 0 ? 'Disponible' : 'Sobrepasado'; ?>
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-<?php echo ($total_presupuesto - $total_gastado) >= 0 ? 'success' : 'danger'; ?> rounded fs-3">
+                                                <i class="ri-<?php echo ($total_presupuesto - $total_gastado) >= 0 ? 'arrow-up' : 'arrow-down'; ?>-line text-<?php echo ($total_presupuesto - $total_gastado) >= 0 ? 'success' : 'danger'; ?>"></i>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -152,6 +191,19 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                             <h5 class="text-danger fs-14 mb-0">
                                                 <i class="ri-alert-line fs-13 align-middle"></i> <?php echo $presupuestos_sobrepasados; ?>
                                             </h5>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4"><?php echo $presupuestos_sobrepasados; ?></h4>
+                                            <span class="badge bg-danger-subtle text-danger mb-0">
+                                                <i class="ri-alert-line align-middle"></i> Presupuestos
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-danger rounded fs-3">
+                                                <i class="ri-alert-line text-danger"></i>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -197,6 +249,24 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                     </div>
                                 </div>
                                 <div class="card-body">
+                                    <?php if (isset($_SESSION['success_message'])): ?>
+                                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                            <i class="ri-check-line me-2"></i>
+                                            <?php echo htmlspecialchars($_SESSION['success_message']); ?>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        <?php unset($_SESSION['success_message']); ?>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (isset($_SESSION['error_message'])): ?>
+                                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                            <i class="ri-error-warning-line me-2"></i>
+                                            <?php echo htmlspecialchars($_SESSION['error_message']); ?>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        <?php unset($_SESSION['error_message']); ?>
+                                    <?php endif; ?>
+                                    
                                     <?php if (empty($presupuestos)): ?>
                                         <div class="text-center py-5">
                                             <div class="text-muted">
@@ -235,9 +305,10 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
                                                                             <i class="ri-more-fill align-middle"></i>
                                                                         </a>
                                                                         <ul class="dropdown-menu dropdown-menu-end">
+                                                                            <li><a class="dropdown-item" href="presupuestos-agregar.php?id=<?php echo $presupuesto['id']; ?>&amp;mode=view"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> Ver Detalles</a></li>
                                                                             <li><a class="dropdown-item" href="presupuestos-agregar.php?id=<?php echo $presupuesto['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
                                                                             <li>
-                                                                                <form action="presupuestos-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este presupuesto?');" style="margin:0;padding:0;">
+                                                                                <form action="presupuestos-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que deseas eliminar el presupuesto \'<?php echo htmlspecialchars(addslashes($presupuesto['nombre'])); ?>\'?\n\nEsta acción no se puede deshacer.');" style="margin:0;padding:0;">
                                                                                     <input type="hidden" name="id" value="<?php echo (int)$presupuesto['id']; ?>">
                                                                                     <button type="submit" class="dropdown-item text-danger"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</button>
                                                                                 </form>
@@ -308,14 +379,6 @@ $porcentaje_gastado = $total_presupuesto > 0 ? ($total_gastado / $total_presupue
 
     <?php include 'layouts/vendor-scripts.php'; ?>
 
-    <script>
-        function eliminarPresupuesto(id) {
-            if (confirm('¿Estás seguro de que quieres eliminar este presupuesto?')) {
-                // Aquí iría la lógica para eliminar el presupuesto
-                console.log('Eliminar presupuesto:', id);
-            }
-        }
-    </script>
 
     <!-- App js -->
     <script src="assets/js/app.js"></script>

@@ -86,6 +86,22 @@ $result = mysqli_stmt_get_result($stmt);
 $categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
+// Get recent transactions for the sidebar
+$sql_recent = "SELECT t.*, c.nombre as categoria_nombre, c.color as categoria_color, c.icono as categoria_icono, 
+               cb.nombre as cuenta_nombre
+        FROM transacciones t
+        LEFT JOIN categorias c ON t.categoria_id = c.id
+        LEFT JOIN cuentas_bancarias cb ON t.cuenta_id = cb.id
+        WHERE t.usuario_id = ?
+        ORDER BY t.fecha DESC, t.fecha_creacion DESC
+        LIMIT 3";
+$stmt = mysqli_prepare($link, $sql_recent);
+mysqli_stmt_bind_param($stmt, "i", $user_id);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+$transacciones_recientes = mysqli_fetch_all($result, MYSQLI_ASSOC);
+mysqli_stmt_close($stmt);
+
 // Processing form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
@@ -164,9 +180,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     mysqli_stmt_close($ust);
                 }
 
-                // Compute balance adjustments
-                $orig_change = ($orig['tipo'] == 'ingreso') ? floatval($orig['monto']) : -floatval($orig['monto']);
-                $new_change = ($tipo == 'ingreso') ? floatval($monto) : -floatval($monto);
+                // Determinar si las cuentas son deudas
+                $orig_account_type_query = "SELECT tipo FROM cuentas_bancarias WHERE id = ? LIMIT 1";
+                $orig_account_stmt = mysqli_prepare($link, $orig_account_type_query);
+                mysqli_stmt_bind_param($orig_account_stmt, "i", $orig['cuenta_id']);
+                mysqli_stmt_execute($orig_account_stmt);
+                $orig_account_result = mysqli_stmt_get_result($orig_account_stmt);
+                $orig_account_data = mysqli_fetch_assoc($orig_account_result);
+                mysqli_stmt_close($orig_account_stmt);
+                
+                $new_account_type_query = "SELECT tipo FROM cuentas_bancarias WHERE id = ? LIMIT 1";
+                $new_account_stmt = mysqli_prepare($link, $new_account_type_query);
+                mysqli_stmt_bind_param($new_account_stmt, "i", $cuenta_id);
+                mysqli_stmt_execute($new_account_stmt);
+                $new_account_result = mysqli_stmt_get_result($new_account_stmt);
+                $new_account_data = mysqli_fetch_assoc($new_account_result);
+                mysqli_stmt_close($new_account_stmt);
+                
+                $orig_is_debt = in_array($orig_account_data['tipo'] ?? '', ['tarjeta_credito', 'prestamo_personal']);
+                $new_is_debt = in_array($new_account_data['tipo'] ?? '', ['tarjeta_credito', 'prestamo_personal']);
+                
+                // Compute balance adjustments considerando tipo de cuenta
+                if ($orig_is_debt) {
+                    $orig_change = ($orig['tipo'] == 'gasto') ? floatval($orig['monto']) : -floatval($orig['monto']);
+                } else {
+                    $orig_change = ($orig['tipo'] == 'ingreso') ? floatval($orig['monto']) : -floatval($orig['monto']);
+                }
+                
+                if ($new_is_debt) {
+                    $new_change = ($tipo == 'gasto') ? floatval($monto) : -floatval($monto);
+                } else {
+                    $new_change = ($tipo == 'ingreso') ? floatval($monto) : -floatval($monto);
+                }
 
                 if ($orig['cuenta_id'] == $cuenta_id) {
                     $delta = $new_change - $orig_change;
@@ -203,8 +248,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     if (mysqli_stmt_execute($stmt)) {
                         $transaction_id = mysqli_insert_id($link);
 
-                        // Update account balance
-                        $balance_change = ($tipo == 'ingreso') ? $monto : -$monto;
+                        // Determinar si la cuenta es una deuda (tarjeta_credito o prestamo_personal)
+                        $account_type_query = "SELECT tipo FROM cuentas_bancarias WHERE id = ? LIMIT 1";
+                        $account_stmt = mysqli_prepare($link, $account_type_query);
+                        mysqli_stmt_bind_param($account_stmt, "i", $cuenta_id);
+                        mysqli_stmt_execute($account_stmt);
+                        $account_result = mysqli_stmt_get_result($account_stmt);
+                        $account_data = mysqli_fetch_assoc($account_result);
+                        mysqli_stmt_close($account_stmt);
+                        
+                        $is_debt_account = in_array($account_data['tipo'] ?? '', ['tarjeta_credito', 'prestamo_personal']);
+                        
+                        // Lógica de actualización de balance:
+                        // - Para cuentas normales: ingreso aumenta, gasto disminuye
+                        // - Para cuentas de deuda: ingreso reduce deuda, gasto aumenta deuda
+                        //   PERO si es un "gasto" en una deuda, normalmente es un pago que reduce la deuda
+                        if ($is_debt_account) {
+                            // En cuentas de deuda, un "gasto" es realmente un pago que reduce la deuda
+                            // Un "ingreso" sería un cargo que aumenta la deuda
+                            $balance_change = ($tipo == 'gasto') ? $monto : -$monto;
+                        } else {
+                            // En cuentas normales, lógica estándar
+                            $balance_change = ($tipo == 'ingreso') ? $monto : -$monto;
+                        }
+                        
                         $update_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
                         $stmt2 = mysqli_prepare($link, $update_balance);
                         mysqli_stmt_bind_param($stmt2, "di", $balance_change, $cuenta_id);
@@ -450,10 +517,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         </div>
 
                                         <div class="text-end">
-                                            <a href="transacciones-lista.php" class="btn btn-light me-2">Cancelar</a>
                                             <?php if (!$read_only): ?>
                                                 <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar Transacción' : 'Guardar Transacción'; ?></button>
                                             <?php endif; ?>
+                                            <a href="transacciones-lista.php" class="btn btn-soft-danger me-2">Cancelar</a>
                                         </div>
                                     </form>
                                 </div>
@@ -492,50 +559,57 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <h5 class="card-title mb-0">Transacciones Recientes</h5>
                                 </div>
                                 <div class="card-body">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <div class="flex-shrink-0 me-2">
-                                            <div class="avatar-xs">
-                                                <span class="avatar-title bg-soft-success text-success rounded">
-                                                    <i class="ri-arrow-up-line"></i>
-                                                </span>
+                                    <?php if (empty($transacciones_recientes)): ?>
+                                        <div class="text-center py-3">
+                                            <div class="text-muted">
+                                                <i class="ri-file-list-line fs-24 text-muted mb-2"></i>
+                                                <p class="mb-0 small">No hay transacciones recientes</p>
                                             </div>
                                         </div>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-0">Salario</h6>
-                                            <small class="text-muted">15 Nov 2024</small>
-                                        </div>
-                                        <div class="text-success fw-semibold">+$8,500</div>
-                                    </div>
-
-                                    <div class="d-flex align-items-center mb-3">
-                                        <div class="flex-shrink-0 me-2">
-                                            <div class="avatar-xs">
-                                                <span class="avatar-title bg-soft-danger text-danger rounded">
-                                                    <i class="ri-arrow-down-line"></i>
-                                                </span>
+                                    <?php else: ?>
+                                        <?php 
+                                        $tipo_colors = [
+                                            'ingreso' => 'success',
+                                            'gasto' => 'danger',
+                                            'transferencia' => 'info'
+                                        ];
+                                        
+                                        $tipo_icons = [
+                                            'ingreso' => 'ri-arrow-up-line',
+                                            'gasto' => 'ri-arrow-down-line',
+                                            'transferencia' => 'ri-exchange-line'
+                                        ];
+                                        
+                                        foreach ($transacciones_recientes as $index => $trans): 
+                                            $monto_class = $trans['tipo'] == 'ingreso' ? 'text-success' : ($trans['tipo'] == 'transferencia' ? 'text-info' : 'text-danger');
+                                            $monto_prefix = $trans['tipo'] == 'ingreso' ? '+' : '-';
+                                            $categoria_color = $trans['categoria_color'] ?: '#6c757d';
+                                            $categoria_icono = $trans['categoria_icono'] ?: 'ri-file-list-line';
+                                            $is_last = ($index === count($transacciones_recientes) - 1);
+                                        ?>
+                                            <div class="d-flex align-items-center <?php echo $is_last ? 'mb-0' : 'mb-3'; ?>">
+                                                <div class="flex-shrink-0 me-2">
+                                                    <div class="avatar-xs">
+                                                        <span class="avatar-title rounded" style="background-color: <?php echo $categoria_color; ?>20; color: <?php echo $categoria_color; ?>">
+                                                            <i class="<?php echo $categoria_icono; ?>"></i>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-0"><?php echo htmlspecialchars($trans['descripcion']); ?></h6>
+                                                    <small class="text-muted"><?php echo date('d M Y', strtotime($trans['fecha'])); ?></small>
+                                                </div>
+                                                <div class="fw-semibold <?php echo $monto_class; ?>">
+                                                    <?php echo $monto_prefix; ?>$<?php echo number_format($trans['monto'], 2); ?>
+                                                </div>
                                             </div>
+                                        <?php endforeach; ?>
+                                        <div class="text-center mt-3">
+                                            <a href="transacciones-lista.php" class="btn btn-soft-primary btn-sm">
+                                                Ver todas las transacciones
+                                            </a>
                                         </div>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-0">Supermercado</h6>
-                                            <small class="text-muted">14 Nov 2024</small>
-                                        </div>
-                                        <div class="text-danger fw-semibold">-$450</div>
-                                    </div>
-
-                                    <div class="d-flex align-items-center mb-0">
-                                        <div class="flex-shrink-0 me-2">
-                                            <div class="avatar-xs">
-                                                <span class="avatar-title bg-soft-danger text-danger rounded">
-                                                    <i class="ri-arrow-down-line"></i>
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-0">Transporte</h6>
-                                            <small class="text-muted">13 Nov 2024</small>
-                                        </div>
-                                        <div class="text-danger fw-semibold">-$120</div>
-                                    </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>

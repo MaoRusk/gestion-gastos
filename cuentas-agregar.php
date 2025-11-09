@@ -55,10 +55,9 @@ if (($is_edit || $is_view) && $id > 0) {
         $tipo = isset($tipo_map[$raw_tipo]) ? $tipo_map[$raw_tipo] : ($row['tipo'] ?? '');
         $banco = $row['banco'];
         $numero_cuenta = $row['numero_cuenta'];
-    // If there is no explicit balance_inicial stored, fall back to balance_actual for display
-    $balance_inicial = isset($row['balance_inicial']) && $row['balance_inicial'] !== null ? $row['balance_inicial'] : (isset($row['balance_actual']) ? $row['balance_actual'] : '');
+        // Use balance_actual as balance_inicial for display
+        $balance_inicial = isset($row['balance_actual']) ? $row['balance_actual'] : '';
         $limite_credito = $row['limite_credito'];
-        $color = !empty($row['color']) ? $row['color'] : '#007bff';
     }
 }
 
@@ -69,7 +68,6 @@ $banco = isset($banco) ? $banco : '';
 $numero_cuenta = isset($numero_cuenta) ? $numero_cuenta : '';
 $balance_inicial = isset($balance_inicial) ? $balance_inicial : '';
 $limite_credito = isset($limite_credito) ? $limite_credito : '';
-$color = isset($color) ? $color : '';
 
 $nombre_err = $tipo_err = $balance_inicial_err = "";
 $success_message = "";
@@ -98,11 +96,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $balance_inicial = floatval($_POST["balance_inicial"]);
     }
 
-    // Optional fields
-    $banco = !empty($_POST["banco"]) ? sanitizeInput($_POST["banco"]) : null;
-    $numero_cuenta = !empty($_POST["numero_cuenta"]) ? sanitizeInput($_POST["numero_cuenta"]) : null;
+    // Optional fields - banco and numero_cuenta are NOT NULL in DB, so provide defaults
+    $banco = !empty($_POST["banco"]) ? sanitizeInput($_POST["banco"]) : 'N/A';
+    $numero_cuenta = !empty($_POST["numero_cuenta"]) ? sanitizeInput($_POST["numero_cuenta"]) : 'N/A';
+
+    if (isset($_POST["limite_credito"])) {
+        $limite_credito = floatval($_POST["limite_credito"]);
+    } else {
+        $limite_credito = null;
+    }
     $limite_credito = !empty($_POST["limite_credito"]) ? floatval($_POST["limite_credito"]) : null;
-    $color = !empty($_POST["color"]) ? $_POST["color"] : '#007bff';
 
     // Check input errors before inserting/updating in database
     if (empty($nombre_err) && empty($tipo_err) && empty($balance_inicial_err)) {
@@ -125,50 +128,77 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             }
 
-            $sql = "UPDATE cuentas_bancarias SET nombre = ?, tipo = ?, banco = ?, numero_cuenta = ?, balance_inicial = ?, /* do not change balance_actual automatically */ limite_credito = ?, color = ? WHERE id = ?";
+            $sql = "UPDATE cuentas_bancarias SET nombre = ?, tipo = ?, banco = ?, numero_cuenta = ?, balance_actual = ?, limite_credito = ? WHERE id = ?";
             if ($ustmt = mysqli_prepare($link, $sql)) {
-                mysqli_stmt_bind_param($ustmt, 'sssssdsd', $param_nombre, $param_tipo, $param_banco, $param_numero_cuenta, $param_balance_inicial, $param_limite_credito, $param_color, $param_id);
-
-                $param_nombre = $nombre;
-                $param_tipo = $tipo;
-                $param_banco = $banco;
-                $param_numero_cuenta = $numero_cuenta;
-                $param_balance_inicial = $balance_inicial;
-                $param_limite_credito = $limite_credito;
-                $param_color = $color;
-                $param_id = $post_id;
+                // Check if using PDO (via database_compat.php) or mysqli
+                if (isset($link->pdo) && $ustmt instanceof PDOStatement) {
+                    // Using PDO - bind parameters directly
+                    $ustmt->bindValue(1, $nombre, PDO::PARAM_STR);
+                    $ustmt->bindValue(2, $tipo, PDO::PARAM_STR);
+                    $ustmt->bindValue(3, $banco, PDO::PARAM_STR);
+                    $ustmt->bindValue(4, $numero_cuenta, PDO::PARAM_STR);
+                    $ustmt->bindValue(5, $balance_inicial, PDO::PARAM_STR);
+                    $ustmt->bindValue(6, $limite_credito, $limite_credito !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
+                    $ustmt->bindValue(7, $post_id, PDO::PARAM_INT);
+                } else {
+                    // Using mysqli - use bind_param
+                    mysqli_stmt_bind_param($ustmt, 'ssssdsi', $nombre, $tipo, $banco, $numero_cuenta, $balance_inicial, $limite_credito, $post_id);
+                }
 
                 if (mysqli_stmt_execute($ustmt)) {
                     $success_message = "Cuenta actualizada exitosamente!";
                 } else {
-                    $success_message = "Error al actualizar la cuenta: " . mysqli_error($link);
+                    if (isset($link->pdo) && $ustmt instanceof PDOStatement) {
+                        $error_info = $ustmt->errorInfo();
+                        $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido';
+                    } else {
+                        $error_msg = mysqli_error($link);
+                    }
+                    $success_message = "Error al actualizar la cuenta: " . $error_msg;
                 }
 
                 mysqli_stmt_close($ustmt);
             }
         } else {
             // Insert new account
-            $sql = "INSERT INTO cuentas_bancarias (usuario_id, nombre, tipo, banco, numero_cuenta, balance_inicial, balance_actual, limite_credito, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO cuentas_bancarias (usuario_id, nombre, tipo, banco, numero_cuenta, balance_actual, limite_credito) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
             if ($stmt = mysqli_prepare($link, $sql)) {
-                mysqli_stmt_bind_param($stmt, "issssddds", $param_usuario_id, $param_nombre, $param_tipo, $param_banco, $param_numero_cuenta, $param_balance_inicial, $param_balance_actual, $param_limite_credito, $param_color);
-
                 $param_usuario_id = getCurrentUserId();
                 $param_nombre = $nombre;
                 $param_tipo = $tipo;
                 $param_banco = $banco;
                 $param_numero_cuenta = $numero_cuenta;
-                $param_balance_inicial = $balance_inicial;
                 $param_balance_actual = $balance_inicial;
                 $param_limite_credito = $limite_credito;
-                $param_color = $color;
+
+                // Check if using PDO (via database_compat.php) or mysqli
+                if (isset($link->pdo) && $stmt instanceof PDOStatement) {
+                    // Using PDO - bind parameters directly
+                    $stmt->bindValue(1, $param_usuario_id, PDO::PARAM_INT);
+                    $stmt->bindValue(2, $param_nombre, PDO::PARAM_STR);
+                    $stmt->bindValue(3, $param_tipo, PDO::PARAM_STR);
+                    $stmt->bindValue(4, $param_banco, PDO::PARAM_STR);
+                    $stmt->bindValue(5, $param_numero_cuenta, PDO::PARAM_STR);
+                    $stmt->bindValue(6, $param_balance_actual, PDO::PARAM_STR);
+                    $stmt->bindValue(7, $param_limite_credito, $param_limite_credito !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
+                } else {
+                    // Using mysqli - use bind_param
+                    mysqli_stmt_bind_param($stmt, "issssdd", $param_usuario_id, $param_nombre, $param_tipo, $param_banco, $param_numero_cuenta, $param_balance_actual, $param_limite_credito);
+                }
 
                 if (mysqli_stmt_execute($stmt)) {
                     $success_message = "Cuenta agregada exitosamente!";
                     // Clear form
-                    $nombre = $tipo = $banco = $numero_cuenta = $balance_inicial = $limite_credito = $color = "";
+                    $nombre = $tipo = $banco = $numero_cuenta = $balance_inicial = $limite_credito = "";
                 } else {
-                    $success_message = "Error al agregar la cuenta: " . mysqli_error($link);
+                    if (isset($link->pdo) && $stmt instanceof PDOStatement) {
+                        $error_info = $stmt->errorInfo();
+                        $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido';
+                    } else {
+                        $error_msg = mysqli_error($link);
+                    }
+                    $success_message = "Error al agregar la cuenta: " . $error_msg;
                 }
 
                 mysqli_stmt_close($stmt);
@@ -255,13 +285,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($tipo_err)) ? 'has-error' : ''; ?>">
                                                     <label for="tipo" class="form-label">Tipo de Cuenta <span class="text-danger">*</span></label>
-                                                    <select class="form-select" id="tipo" name="tipo" <?php echo $read_only ? 'disabled' : ''; ?>>
+                                                    <select class="form-select" id="tipo" name="tipo" <?php echo $read_only ? 'disabled' : ''; ?> onchange="ocultarLimiteCredito(this.value)">
                                                         <option value="">Seleccionar tipo</option>
                                                         <option value="cuenta_corriente" <?php echo ($tipo == 'cuenta_corriente') ? 'selected' : ''; ?>>Cuenta Corriente</option>
                                                         <option value="cuenta_ahorros" <?php echo ($tipo == 'cuenta_ahorros') ? 'selected' : ''; ?>>Cuenta de Ahorros</option>
                                                         <option value="tarjeta_credito" <?php echo ($tipo == 'tarjeta_credito') ? 'selected' : ''; ?>>Tarjeta de Crédito</option>
+                                                        <option value="prestamo_personal" <?php echo ($tipo == 'prestamo_personal') ? 'selected' : ''; ?>>Préstamo Personal</option>
                                                         <option value="efectivo" <?php echo ($tipo == 'efectivo') ? 'selected' : ''; ?>>Efectivo</option>
-                                                        <option value="inversion" <?php echo ($tipo == 'inversion') ? 'selected' : ''; ?>>Inversión</option>
                                                     </select>
                                                     <span class="text-danger"><?php echo $tipo_err; ?></span>
                                                 </div>
@@ -278,7 +308,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3">
                                                     <label for="numero_cuenta" class="form-label">Número de Cuenta</label>
-                                                    <input type="text" class="form-control" id="numero_cuenta" name="numero_cuenta" value="<?php echo $numero_cuenta; ?>" placeholder="Últimos 4 dígitos" <?php echo $read_only ? 'disabled' : ''; ?>>
+                                                    <input type="text" class="form-control" id="numero_cuenta" name="numero_cuenta" value="<?php echo $numero_cuenta; ?>" placeholder="Últimos 4 dígitos" <?php echo $read_only ? 'disabled' : ''; ?> maxlength="4">
                                                 </div>
                                             </div>
                                         </div>
@@ -295,31 +325,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label for="limite_credito" class="form-label">Límite de Crédito</label>
+                                                <div class="mb-3" id="limite_credito_container" style="display: <?php echo in_array($tipo, ['tarjeta_credito', 'prestamo_personal']) ? 'block' : 'none'; ?>">
+                                                    <label for="limite_credito" class="form-label" id="limite_credito_label"><?php echo $tipo === 'prestamo_personal' ? 'Monto Original del Préstamo' : 'Límite de Crédito'; ?></label>
                                                     <div class="input-group">
                                                         <span class="input-group-text">$</span>
                                                         <input type="number" class="form-control" id="limite_credito" name="limite_credito" value="<?php echo $limite_credito; ?>" placeholder="0.00" step="0.01" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     </div>
-                                                    <small class="text-muted">Solo para tarjetas de crédito</small>
+                                                    <small class="text-muted" id="limite_credito_help"><?php echo $tipo === 'prestamo_personal' ? 'Monto total que debes pagar' : 'Solo para tarjetas de crédito'; ?></small>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label for="color" class="form-label">Color de la Cuenta</label>
-                                                    <input type="color" class="form-control form-control-color" id="color" name="color" value="<?php echo $color; ?>" title="Seleccionar color" <?php echo $read_only ? 'disabled' : ''; ?>>
-                                                </div>
-                                            </div>
-                                        </div>
 
                                         <div class="text-end">
-                                            <a href="cuentas-lista.php" class="btn btn-danger me-2">Cancelar</a>
                                             <?php if (!$read_only): ?>
                                                 <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar Cuenta' : 'Guardar Cuenta'; ?></button>
                                             <?php endif; ?>
+                                            <a href="cuentas-lista.php" class="btn btn-soft-danger me-2">Cancelar</a>
                                         </div>
                                     </form>
                                 </div>
@@ -343,16 +365,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <strong>Cuenta Corriente:</strong> Para gastos diarios
                                         </li>
                                         <li class="mb-2">
-                                            <i class="ri-money-dollar-box-line text-success me-2"></i>
-                                            <strong>Cuenta de Ahorros:</strong> Para ahorrar dinero
-                                        </li>
-                                        <li class="mb-2">
                                             <i class="ri-bank-card-line text-warning me-2"></i>
                                             <strong>Tarjeta de Crédito:</strong> Para compras a crédito
                                         </li>
                                         <li class="mb-2">
-                                            <i class="ri-money-dollar-circle-line text-info me-2"></i>
+                                            <i class="ri-money-dollar-circle-line text-success me-2"></i>
                                             <strong>Efectivo:</strong> Para dinero en efectivo
+                                        </li>
+                                        <li class="mb-2">
+                                            <i class="ri-money-dollar-box-line text-info me-2"></i>
+                                            <strong>Cuenta de Ahorros:</strong> Para ahorrar dinero
+                                        </li>
+                                        <li class="mb-2">
+                                            <i class="ri-hand-coin-line text-danger me-2"></i>
+                                            <strong>Préstamos Personales:</strong> Deudas a crédito
                                         </li>
                                     </ul>
 
@@ -385,3 +411,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </body>
 
 </html>
+
+<script>
+    function ocultarLimiteCredito(tipo) {
+        const container = document.getElementById('limite_credito_container');
+        const label = document.getElementById('limite_credito_label');
+        const help = document.getElementById('limite_credito_help');
+        
+        if (tipo === 'tarjeta_credito' || tipo === 'prestamo_personal') {
+            container.style.display = 'block';
+            if (tipo === 'prestamo_personal') {
+                label.textContent = 'Monto Original del Préstamo';
+                help.textContent = 'Monto total que debes pagar';
+            } else {
+                label.textContent = 'Límite de Crédito';
+                help.textContent = 'Solo para tarjetas de crédito';
+            }
+        } else {
+            container.style.display = 'none';
+        }
+    }
+    
+    // Inicializar al cargar la página
+    document.addEventListener('DOMContentLoaded', function() {
+        const tipoSelect = document.getElementById('tipo');
+        if (tipoSelect) {
+            ocultarLimiteCredito(tipoSelect.value);
+        }
+    });
+</script>

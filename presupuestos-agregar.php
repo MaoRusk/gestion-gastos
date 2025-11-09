@@ -136,6 +136,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             }
 
+            // Update presupuesto
             $update_sql = "UPDATE presupuestos SET nombre = ?, monto_limite = ?, categoria_id = ?, fecha_inicio = ?, fecha_fin = ?, descripcion = ? WHERE id = ?";
             if ($ust = mysqli_prepare($link, $update_sql)) {
                 mysqli_stmt_bind_param($ust, 'sdisssi', $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion, $post_id);
@@ -149,17 +150,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         } else {
             // Insert new budget
-            $sql = "INSERT INTO presupuestos (usuario_id, nombre, monto_limite, categoria_id, fecha_inicio, fecha_fin, descripcion, activo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)";
+            // Use TRUE for PostgreSQL, 1 for MySQL/SQLite
+            $activo_value = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'TRUE' : '1';
+            $sql = "INSERT INTO presupuestos (usuario_id, nombre, monto_limite, categoria_id, fecha_inicio, fecha_fin, descripcion, activo) VALUES (?, ?, ?, ?, ?, ?, ?, " . $activo_value . ")";
 
             if ($stmt = mysqli_prepare($link, $sql)) {
                 mysqli_stmt_bind_param($stmt, "isdisss", $user_id, $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion);
                 if (mysqli_stmt_execute($stmt)) {
                     $success_message = "Presupuesto creado exitosamente!";
+                    // Clear form
                     $nombre = $monto_limite = $categoria_id = $fecha_inicio = $fecha_fin = $descripcion = "";
                 } else {
-                    $success_message = "Error: " . mysqli_error($link);
+                    // Get detailed error message
+                    $error_msg = mysqli_error($link);
+                    if (empty($error_msg) && isset($link->pdo) && $stmt instanceof PDOStatement) {
+                        $error_info = $stmt->errorInfo();
+                        $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido al ejecutar la consulta';
+                    }
+                    $success_message = "Error al crear presupuesto: " . $error_msg;
                 }
                 mysqli_stmt_close($stmt);
+            } else {
+                // Get detailed error message for prepare failure
+                $error_msg = mysqli_error($link);
+                if (empty($error_msg) && isset($link->pdo) && $link->pdo instanceof PDO) {
+                    $error_info = $link->pdo->errorInfo();
+                    $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido al preparar la consulta';
+                }
+                $success_message = "Error al preparar la consulta: " . $error_msg;
             }
         }
     }
@@ -193,7 +211,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="row">
                         <div class="col-12">
                             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                                <h4 class="mb-sm-0">Nuevo Presupuesto</h4>
+                                <h4 class="mb-sm-0"><?php echo $is_edit ? 'Editar Presupuesto' : ($is_view ? 'Ver Presupuesto' : 'Nuevo Presupuesto'); ?></h4>
 
                                 <div class="page-title-right">
                                     <ol class="breadcrumb m-0">
@@ -221,12 +239,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         </div>
                                     <?php endif; ?>
                                     
-                                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                    <?php
+                                    $form_action = htmlspecialchars($_SERVER["PHP_SELF"]);
+                                    $read_only = ($is_view);
+                                    ?>
+                                    
+                                    <form action="<?php echo $form_action; ?>" method="post">
+                                        <?php if ($is_edit || $is_view): ?>
+                                            <input type="hidden" name="id" value="<?php echo (int)$id; ?>">
+                                            <input type="hidden" name="mode" value="<?php echo $is_edit ? 'edit' : 'view'; ?>">
+                                        <?php endif; ?>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($nombre_err)) ? 'has-error' : ''; ?>">
                                                     <label for="nombre" class="form-label">Nombre del Presupuesto <span class="text-danger">*</span></label>
-                                                    <input type="text" class="form-control" id="nombre" name="nombre" value="<?php echo $nombre; ?>" placeholder="Ej: Presupuesto de Alimentación">
+                                                    <input type="text" class="form-control" id="nombre" name="nombre" value="<?php echo $nombre; ?>" placeholder="Ej: Presupuesto de Alimentación" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     <span class="text-danger"><?php echo $nombre_err; ?></span>
                                                 </div>
                                             </div>
@@ -235,7 +262,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                                     <label for="monto_limite" class="form-label">Monto Límite <span class="text-danger">*</span></label>
                                                     <div class="input-group">
                                                         <span class="input-group-text">$</span>
-                                                        <input type="number" class="form-control" id="monto_limite" name="monto_limite" value="<?php echo $monto_limite; ?>" placeholder="0.00" step="0.01">
+                                                        <input type="number" class="form-control" id="monto_limite" name="monto_limite" value="<?php echo $monto_limite; ?>" placeholder="0.00" step="0.01" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     </div>
                                                     <span class="text-danger"><?php echo $monto_limite_err; ?></span>
                                                 </div>
@@ -246,7 +273,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($categoria_err)) ? 'has-error' : ''; ?>">
                                                     <label for="categoria_id" class="form-label">Categoría <span class="text-danger">*</span></label>
-                                                    <select class="form-select" id="categoria_id" name="categoria_id">
+                                                    <select class="form-select" id="categoria_id" name="categoria_id" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                         <option value="">Seleccionar categoría</option>
                                                         <?php foreach ($categorias as $categoria): ?>
                                                             <option value="<?php echo $categoria['id']; ?>" <?php echo ($categoria_id == $categoria['id']) ? 'selected' : ''; ?>>
@@ -260,7 +287,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3">
                                                     <label for="tipo_presupuesto" class="form-label">Tipo de Presupuesto</label>
-                                                    <select class="form-select" id="tipo_presupuesto" onchange="toggleTipoPresupuesto()">
+                                                    <select class="form-select" id="tipo_presupuesto" onchange="toggleTipoPresupuesto()" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                         <option value="mensual">Mensual</option>
                                                         <option value="semanal">Semanal</option>
                                                         <option value="anual">Anual</option>
@@ -274,14 +301,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($fecha_inicio_err)) ? 'has-error' : ''; ?>">
                                                     <label for="fecha_inicio" class="form-label">Fecha de Inicio <span class="text-danger">*</span></label>
-                                                    <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="<?php echo $fecha_inicio; ?>">
+                                                    <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="<?php echo $fecha_inicio; ?>" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     <span class="text-danger"><?php echo $fecha_inicio_err; ?></span>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="mb-3 <?php echo (!empty($fecha_fin_err)) ? 'has-error' : ''; ?>">
                                                     <label for="fecha_fin" class="form-label">Fecha de Fin <span class="text-danger">*</span></label>
-                                                    <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="<?php echo $fecha_fin; ?>">
+                                                    <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="<?php echo $fecha_fin; ?>" <?php echo $read_only ? 'disabled' : ''; ?>>
                                                     <span class="text-danger"><?php echo $fecha_fin_err; ?></span>
                                                 </div>
                                             </div>
@@ -289,12 +316,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                                         <div class="mb-3">
                                             <label for="descripcion" class="form-label">Descripción</label>
-                                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" placeholder="Descripción opcional del presupuesto"><?php echo $descripcion; ?></textarea>
+                                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" placeholder="Descripción opcional del presupuesto" <?php echo $read_only ? 'disabled' : ''; ?>><?php echo $descripcion; ?></textarea>
                                         </div>
 
                                         <div class="text-end">
-                                            <a href="presupuestos-lista.php" class="btn btn-light me-2">Cancelar</a>
-                                            <button type="submit" class="btn btn-primary">Crear Presupuesto</button>
+                                            <?php if (!$read_only): ?>
+                                                <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar Presupuesto' : 'Crear Presupuesto'; ?></button>
+                                            <?php endif; ?>
+                                            <a href="presupuestos-lista.php" class="btn btn-soft-danger me-2">Cancelar</a>
                                         </div>
                                     </form>
                                 </div>

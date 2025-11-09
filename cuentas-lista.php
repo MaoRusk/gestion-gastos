@@ -22,14 +22,21 @@ mysqli_stmt_close($stmt);
 // Calculate totals
 $total_balance = 0;
 $total_debt = 0;
+
 foreach ($cuentas as $cuenta) {
-    if ($cuenta['tipo'] == 'tarjeta_credito') {
+    if (in_array($cuenta['tipo'], ['tarjeta_credito', 'prestamo_personal'])) {
+        // Para deudas: siempre sumar el valor absoluto del balance (puede ser negativo o positivo)
         $total_debt += abs($cuenta['balance_actual']);
     } else {
-        $total_balance += $cuenta['balance_actual'];
+        // Para cuentas normales: sumar solo si el balance es positivo
+        if ($cuenta['balance_actual'] > 0) {
+            $total_balance += $cuenta['balance_actual'];
+        }
     }
 }
+
 $patrimonio_neto = $total_balance - $total_debt;
+
 ?>
 <?php include 'layouts/head-main.php'; ?>
 
@@ -87,6 +94,24 @@ $patrimonio_neto = $total_balance - $total_debt;
                                     </div>
                                 </div>
                                 <div class="card-body">
+                                    <?php if (isset($_SESSION['success_message'])): ?>
+                                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                            <i class="ri-check-line me-2"></i>
+                                            <?php echo htmlspecialchars($_SESSION['success_message']); ?>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        <?php unset($_SESSION['success_message']); ?>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (isset($_SESSION['error_message'])): ?>
+                                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                            <i class="ri-error-warning-line me-2"></i>
+                                            <?php echo htmlspecialchars($_SESSION['error_message']); ?>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        <?php unset($_SESSION['error_message']); ?>
+                                    <?php endif; ?>
+                                    
                                     <div class="table-responsive">
                                         <table class="table table-borderless table-nowrap align-middle mb-0">
                                             <thead class="table-light">
@@ -115,30 +140,44 @@ $patrimonio_neto = $total_balance - $total_debt;
                                                         <?php
                                                         $tipo_labels = [
                                                             'cuenta_corriente' => 'Cuenta Corriente',
-                                                            'cuenta_ahorros' => 'Cuenta de Ahorros',
                                                             'tarjeta_credito' => 'Tarjeta de Crédito',
+                                                            'prestamo_personal' => 'Préstamo Personal',
                                                             'efectivo' => 'Efectivo',
-                                                            'inversion' => 'Inversión'
+                                                            'cuenta_ahorros' => 'Cuenta de Ahorros'
                                                         ];
                                                         
                                                         $iconos = [
                                                             'cuenta_corriente' => 'ri-bank-line',
-                                                            'cuenta_ahorros' => 'ri-piggy-bank-line',
-                                                            'tarjeta_credito' => 'ri-credit-card-line',
+                                                            'tarjeta_credito' => 'ri-bank-card-line',
+                                                            'prestamo_personal' => 'ri-hand-coin-line',
                                                             'efectivo' => 'ri-money-dollar-circle-line',
-                                                            'inversion' => 'ri-line-chart-line'
+                                                            'cuenta_ahorros' => 'ri-money-dollar-box-line'
+                                                        ];
+
+                                                        $color = [
+                                                            'cuenta_corriente' => 'primary',
+                                                            'tarjeta_credito' => 'warning',
+                                                            'prestamo_personal' => 'danger',
+                                                            'efectivo' => 'success',
+                                                            'cuenta_ahorros' => 'info'
                                                         ];
                                                         
-                                                        $is_credit = $cuenta['tipo'] == 'tarjeta_credito';
+                                                        $is_debt = in_array($cuenta['tipo'], ['tarjeta_credito', 'prestamo_personal']);
                                                         $balance_class = $cuenta['balance_actual'] < 0 ? 'text-danger' : 'text-success';
-                                                        $balance_prefix = $is_credit && $cuenta['balance_actual'] < 0 ? '-' : '';
+                                                        $balance_prefix = $is_debt && $cuenta['balance_actual'] < 0 ? '-' : '';
+                                                        
+                                                        // Calcular progreso de pago si es deuda
+                                                        $monto_original = !empty($cuenta['limite_credito']) ? abs($cuenta['limite_credito']) : 0;
+                                                        $deuda_actual = abs($cuenta['balance_actual']);
+                                                        $pagado = $monto_original > 0 ? ($monto_original - $deuda_actual) : 0;
+                                                        $porcentaje_pagado = $monto_original > 0 ? (($pagado * 100) / $monto_original) : 0;
                                                         ?>
                                                         <tr>
                                                             <td>
                                                                 <div class="d-flex align-items-center">
                                                                     <div class="flex-shrink-0 me-2">
                                                                         <div class="avatar-xs">
-                                                                            <span class="avatar-title rounded" style="background-color: <?php echo $cuenta['color']; ?>20; color: <?php echo $cuenta['color']; ?>">
+                                                                            <span class="avatar-title bg-soft-<?php echo $color[$cuenta['tipo']]; ?> text-<?php echo $color[$cuenta['tipo']]; ?> rounded fs-3">
                                                                                 <i class="<?php echo $iconos[$cuenta['tipo']]; ?>"></i>
                                                                             </span>
                                                                         </div>
@@ -154,7 +193,13 @@ $patrimonio_neto = $total_balance - $total_debt;
                                                             <td><?php echo $tipo_labels[$cuenta['tipo']]; ?></td>
                                                             <td><?php echo !empty($cuenta['banco']) ? htmlspecialchars($cuenta['banco']) : '-'; ?></td>
                                                             <td class="fw-semibold <?php echo $balance_class; ?>">
-                                                                <?php echo $balance_prefix; ?>$<?php echo number_format($cuenta['balance_actual'], 2); ?>
+                                                                <?php echo $balance_prefix; ?>$<?php echo number_format(abs($cuenta['balance_actual']), 2); ?>
+                                                                <?php if ($is_debt && $monto_original > 0): ?>
+                                                                    <br><small class="text-muted">
+                                                                        Progreso: <?php echo number_format($porcentaje_pagado, 1); ?>% 
+                                                                        (<?php echo number_format($pagado, 2); ?> / <?php echo number_format($monto_original, 2); ?>)
+                                                                    </small>
+                                                                <?php endif; ?>
                                                             </td>
                                                             <td>
                                                                 <span class="badge <?php echo $cuenta['activa'] ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?>">
@@ -170,7 +215,7 @@ $patrimonio_neto = $total_balance - $total_debt;
                                                                         <li><a class="dropdown-item" href="cuentas-agregar.php?id=<?php echo (int)$cuenta['id']; ?>&amp;mode=view"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> Ver Detalles</a></li>
                                                                         <li><a class="dropdown-item" href="cuentas-agregar.php?id=<?php echo (int)$cuenta['id']; ?>&amp;mode=edit"><i class="ri-pencil-fill align-bottom me-2 text-muted"></i> Editar</a></li>
                                                                         <li>
-                                                                            <form action="cuentas-eliminar.php" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar esta cuenta?');" style="margin:0;padding:0;">
+                                                                            <form action="cuentas-eliminar.php" method="post" onsubmit="return confirm('¿Estás seguro de que deseas eliminar la cuenta \'<?php echo htmlspecialchars(addslashes($cuenta['nombre'])); ?>\'?\n\nEsta acción eliminará permanentemente la cuenta y todas las transacciones asociadas. Esta acción no se puede deshacer.');" style="margin:0;padding:0;">
                                                                                 <input type="hidden" name="id" value="<?php echo (int)$cuenta['id']; ?>">
                                                                                 <button type="submit" class="dropdown-item text-danger"><i class="ri-delete-bin-fill align-bottom me-2 text-muted"></i> Eliminar</button>
                                                                             </form>
@@ -200,7 +245,7 @@ $patrimonio_neto = $total_balance - $total_debt;
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-primary fs-14 mb-0">
-                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> +$18,900
+                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> $<?php echo number_format($total_balance, 2); ?>
                                             </h5>
                                         </div>
                                     </div>
@@ -230,7 +275,7 @@ $patrimonio_neto = $total_balance - $total_debt;
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-danger fs-14 mb-0">
-                                                <i class="ri-arrow-down-line fs-13 align-middle"></i> -$2,300
+                                                <i class="ri-arrow-down-line fs-13 align-middle"></i> $<?php echo number_format($total_debt, 2); ?>
                                             </h5>
                                         </div>
                                     </div>
@@ -259,16 +304,16 @@ $patrimonio_neto = $total_balance - $total_debt;
                                             <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Patrimonio Neto</p>
                                         </div>
                                         <div class="flex-shrink-0">
-                                            <h5 class="text-success fs-14 mb-0">
-                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> +$16,600
+                                            <h5 class="<?php echo $patrimonio_neto >= 0 ? 'text-success' : 'text-danger'; ?> fs-14 mb-0">
+                                                <i class="ri-arrow-<?php echo $patrimonio_neto >= 0 ? 'up' : 'down'; ?>-line fs-13 align-middle"></i> $<?php echo number_format($patrimonio_neto, 2); ?>
                                             </h5>
                                         </div>
                                     </div>
                                     <div class="d-flex align-items-end justify-content-between mt-4">
                                         <div>
                                             <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($patrimonio_neto, 2); ?></h4>
-                                            <span class="badge bg-success-subtle text-success mb-0">
-                                                <i class="ri-arrow-up-line align-middle"></i> Neto
+                                            <span class="badge <?php echo $patrimonio_neto >= 0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?> mb-0">
+                                                <i class="ri-arrow-<?php echo $patrimonio_neto >= 0 ? 'up' : 'down'; ?>-line align-middle"></i> <?php echo $patrimonio_neto >= 0 ? 'Neto' : 'Negativo'; ?>
                                             </span>
                                         </div>
                                         <div class="avatar-sm flex-shrink-0">

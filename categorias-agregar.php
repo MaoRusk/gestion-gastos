@@ -306,10 +306,10 @@ $colores = [
                                         </div>
 
                                         <div class="text-end">
-                                            <a href="categorias-lista.php" class="btn btn-light me-2">Cancelar</a>
                                             <?php if (!$read_only): ?>
                                                 <button type="submit" class="btn btn-primary"><?php echo $is_edit ? 'Actualizar categoría' : 'Crear Categoría'; ?></button>
                                             <?php endif; ?>
+                                            <a href="categorias-lista.php" class="btn btn-soft-danger me-2">Cancelar</a>
                                         </div>
                                     </form>
                                 </div>

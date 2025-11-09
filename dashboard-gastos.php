@@ -8,6 +8,97 @@ require_once "includes/auth_functions.php";
 
 // Check if the user is logged in, if not then redirect him to login page
 requireAuth();
+
+$user_id = getCurrentUserId();
+
+// 1. Balance Total (Suma de balances de todas las cuentas activas)
+$sql_balance = "SELECT SUM(balance_actual) as balance_total 
+               FROM cuentas_bancarias 
+               WHERE usuario_id = ? AND activa = true";
+
+$stmt_balance = mysqli_prepare($link, $sql_balance);
+mysqli_stmt_bind_param($stmt_balance, "i", $user_id);
+mysqli_stmt_execute($stmt_balance);
+
+$result_balance = mysqli_stmt_get_result($stmt_balance);
+$balance_data = mysqli_fetch_assoc($result_balance);
+$balance_total = $balance_data['balance_total'] ?? 0;
+mysqli_stmt_close($stmt_balance);
+
+// 2. Ingresos del mes actual - CORREGIDO para PostgreSQL
+$sql_ingresos = "SELECT COALESCE(SUM(monto), 0) as total_ingresos 
+                FROM transacciones 
+                WHERE usuario_id = ? 
+                AND tipo = 'ingreso' 
+                AND fecha >= DATE_TRUNC('month', CURRENT_DATE)
+                AND activa = true";
+
+$stmt_ingresos = mysqli_prepare($link, $sql_ingresos);
+mysqli_stmt_bind_param($stmt_ingresos, "i", $user_id);
+mysqli_stmt_execute($stmt_ingresos);
+
+$result_ingresos = mysqli_stmt_get_result($stmt_ingresos);
+$ingresos_data = mysqli_fetch_assoc($result_ingresos);
+$total_ingresos = $ingresos_data['total_ingresos'] ?? 0;
+mysqli_stmt_close($stmt_ingresos);
+
+// 3. Gastos del mes actual - CORREGIDO para PostgreSQL
+$sql_gastos = "SELECT COALESCE(SUM(monto), 0) as total_gastos 
+              FROM transacciones 
+              WHERE usuario_id = ? 
+              AND tipo = 'gasto' 
+              AND fecha >= DATE_TRUNC('month', CURRENT_DATE)
+              AND activa = true";
+
+$stmt_gastos = mysqli_prepare($link, $sql_gastos);
+mysqli_stmt_bind_param($stmt_gastos, "i", $user_id);
+mysqli_stmt_execute($stmt_gastos);
+
+$result_gastos = mysqli_stmt_get_result($stmt_gastos);
+$gastos_data = mysqli_fetch_assoc($result_gastos);
+$total_gastos = $gastos_data['total_gastos'] ?? 0;
+mysqli_stmt_close($stmt_gastos);
+
+// 4. Ahorro del mes (Ingresos - Gastos)
+$ahorro_mes = $total_ingresos - $total_gastos;
+
+// 5. Transacciones recientes (últimas 5)
+$sql_transacciones = "SELECT t.descripcion, t.monto, t.tipo, t.fecha, c.nombre as categoria_nombre
+                     FROM transacciones t
+                     LEFT JOIN categorias c ON t.categoria_id = c.id
+                     WHERE t.usuario_id = ? 
+                     AND t.activa = true
+                     ORDER BY t.fecha DESC, t.id DESC 
+                     LIMIT 5";
+
+$stmt_transacciones = mysqli_prepare($link, $sql_transacciones);
+mysqli_stmt_bind_param($stmt_transacciones, "i", $user_id);
+mysqli_stmt_execute($stmt_transacciones);
+
+$result_transacciones = mysqli_stmt_get_result($stmt_transacciones);
+$transacciones = mysqli_fetch_all($result_transacciones, MYSQLI_ASSOC);
+mysqli_stmt_close($stmt_transacciones);
+
+// 6. Metas de ahorro activas
+$sql_metas = "SELECT nombre, monto_objetivo, monto_actual 
+             FROM metas_ahorro 
+             WHERE usuario_id = ? 
+             AND activa = true 
+             ORDER BY fecha_creacion DESC 
+             LIMIT 3";
+
+$stmt_metas = mysqli_prepare($link, $sql_metas);
+mysqli_stmt_bind_param($stmt_metas, "i", $user_id);
+mysqli_stmt_execute($stmt_metas);
+
+$result_metas = mysqli_stmt_get_result($stmt_metas);
+$metas = mysqli_fetch_all($result_metas, MYSQLI_ASSOC);
+mysqli_stmt_close($stmt_metas);
+
+// Función para formatear moneda
+function formatCurrency($amount) {
+    return '$' . number_format($amount, 2);
+}
 ?>
 <?php include 'layouts/head-main.php'; ?>
 
@@ -62,7 +153,8 @@ requireAuth();
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-primary fs-14 mb-0">
-                                                <i class="ri-arrow-right-up-line fs-13 align-middle"></i> +$12,350
+                                                <!-- <i class="ri-arrow-right-up-line fs-13 align-middle"></i> +$12,350 -->
+                                                <i class="ri-arrow-right-up-line fs-13 align-middle"></i> <?php echo number_format($balance_total, 2); ?>
                                             </h5>
                                         </div>
                                     </div>

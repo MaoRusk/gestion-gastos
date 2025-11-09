@@ -20,20 +20,22 @@ $fecha_fin = isset($_GET['fecha_fin']) ? $_GET['fecha_fin'] : date('Y-m-t');
 $isSqlite = isset($link->type) && $link->type === 'sqlite';
 $isPostgres = defined('DB_TYPE') && DB_TYPE === 'postgresql';
 $six_months_ago = date('Y-m-d', strtotime($fecha_fin . ' -6 months'));
+$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 't.activa = TRUE' : 't.activa = 1';
+
 if ($isSqlite) {
-    $groupExpr = "strftime('%Y-%m', fecha)";
+    $groupExpr = "strftime('%Y-%m', t.fecha)";
 } elseif ($isPostgres) {
     // PostgreSQL: use to_char to format date to year-month
-    $groupExpr = "to_char(fecha, 'YYYY-MM')";
+    $groupExpr = "to_char(t.fecha, 'YYYY-MM')";
 } else {
     // MySQL (default)
-    $groupExpr = "DATE_FORMAT(fecha, '%Y-%m')";
+    $groupExpr = "DATE_FORMAT(t.fecha, '%Y-%m')";
 }
 
-$sql_income = "SELECT " . $groupExpr . " as mes, SUM(monto) as total
-               FROM transacciones 
-               WHERE usuario_id = ? AND tipo = 'ingreso' 
-               AND fecha >= ?
+$sql_income = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(t.monto), 0) as total
+               FROM transacciones t
+               WHERE t.usuario_id = ? AND t.tipo = 'ingreso' 
+               AND t.fecha >= ? AND " . $activeCondition . "
                GROUP BY mes
                ORDER BY mes";
 $stmt = mysqli_prepare($link, $sql_income);
@@ -42,14 +44,14 @@ mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $monthly_income = [];
 while ($row = mysqli_fetch_assoc($result)) {
-    $monthly_income[$row['mes']] = $row['total'];
+    $monthly_income[$row['mes']] = floatval($row['total']);
 }
 mysqli_stmt_close($stmt);
 
-$sql_expenses = "SELECT " . $groupExpr . " as mes, SUM(monto) as total
-                 FROM transacciones 
-                 WHERE usuario_id = ? AND tipo = 'gasto' 
-                 AND fecha >= ?
+$sql_expenses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(t.monto), 0) as total
+                 FROM transacciones t
+                 WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
+                 AND t.fecha >= ? AND " . $activeCondition . "
                  GROUP BY mes
                  ORDER BY mes";
 $stmt = mysqli_prepare($link, $sql_expenses);
@@ -58,16 +60,17 @@ mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $monthly_expenses = [];
 while ($row = mysqli_fetch_assoc($result)) {
-    $monthly_expenses[$row['mes']] = $row['total'];
+    $monthly_expenses[$row['mes']] = floatval($row['total']);
 }
 mysqli_stmt_close($stmt);
 
 // Get expenses by category for the selected period
-$sql_categories = "SELECT c.nombre, c.color, SUM(t.monto) as total
+$activeCondition2 = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 't.activa = TRUE' : 't.activa = 1';
+$sql_categories = "SELECT c.nombre, c.color, COALESCE(SUM(t.monto), 0) as total
                    FROM transacciones t
                    JOIN categorias c ON t.categoria_id = c.id
                    WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
-                   AND t.fecha BETWEEN ? AND ?
+                   AND t.fecha BETWEEN ? AND ? AND " . $activeCondition2 . "
                    GROUP BY c.id, c.nombre, c.color
                    ORDER BY total DESC";
 $stmt = mysqli_prepare($link, $sql_categories);
@@ -77,21 +80,89 @@ $result = mysqli_stmt_get_result($stmt);
 $expenses_by_category = mysqli_fetch_all($result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
-// Get total income and expenses for the selected period
-$sql_totals = "SELECT 
-               SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END) as total_ingresos,
-               SUM(CASE WHEN tipo = 'gasto' THEN monto ELSE 0 END) as total_gastos
-               FROM transacciones 
-               WHERE usuario_id = ? AND fecha BETWEEN ? AND ?";
-$stmt = mysqli_prepare($link, $sql_totals);
-mysqli_stmt_bind_param($stmt, "iss", $user_id, $fecha_inicio, $fecha_fin);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$totals = mysqli_fetch_assoc($result);
-mysqli_stmt_close($stmt);
+// Ensure all totals are floats
+foreach ($expenses_by_category as &$category) {
+    $category['total'] = floatval($category['total']);
+}
+unset($category);
 
-$total_ingresos = $totals['total_ingresos'] ?? 0;
-$total_gastos = $totals['total_gastos'] ?? 0;
+// Get total income and expenses for the selected period
+// Filter only active transactions - use separate queries for better reliability
+
+// Get total income
+if (defined('DB_TYPE') && DB_TYPE === 'postgresql') {
+    $sql_income_total = "SELECT COALESCE(SUM(t.monto), 0) as total
+                         FROM transacciones t
+                         WHERE t.usuario_id = ? AND t.tipo = 'ingreso' 
+                         AND t.fecha BETWEEN ? AND ? AND (t.activa = TRUE OR t.activa IS NULL)";
+} else {
+    $sql_income_total = "SELECT COALESCE(SUM(t.monto), 0) as total
+                         FROM transacciones t
+                         WHERE t.usuario_id = ? AND t.tipo = 'ingreso' 
+                         AND t.fecha BETWEEN ? AND ? AND (t.activa = 1 OR t.activa IS NULL)";
+}
+$stmt_income = mysqli_prepare($link, $sql_income_total);
+if ($stmt_income) {
+    mysqli_stmt_bind_param($stmt_income, "iss", $user_id, $fecha_inicio, $fecha_fin);
+    mysqli_stmt_execute($stmt_income);
+    $result_income = mysqli_stmt_get_result($stmt_income);
+    $row_income = mysqli_fetch_assoc($result_income);
+    $total_ingresos = floatval($row_income['total'] ?? 0);
+    mysqli_stmt_close($stmt_income);
+} else {
+    $total_ingresos = 0;
+}
+
+// Get total expenses
+// Try with activa filter first, fallback without if needed
+if (defined('DB_TYPE') && DB_TYPE === 'postgresql') {
+    $sql_expenses_total = "SELECT COALESCE(SUM(t.monto), 0) as total
+                           FROM transacciones t
+                           WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
+                           AND t.fecha BETWEEN ? AND ? AND (t.activa = TRUE OR t.activa IS NULL)";
+} else {
+    $sql_expenses_total = "SELECT COALESCE(SUM(t.monto), 0) as total
+                           FROM transacciones t
+                           WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
+                           AND t.fecha BETWEEN ? AND ? AND (t.activa = 1 OR t.activa IS NULL)";
+}
+$stmt_expenses = mysqli_prepare($link, $sql_expenses_total);
+
+if ($stmt_expenses) {
+    mysqli_stmt_bind_param($stmt_expenses, "iss", $user_id, $fecha_inicio, $fecha_fin);
+    mysqli_stmt_execute($stmt_expenses);
+    $result_expenses = mysqli_stmt_get_result($stmt_expenses);
+    $row_expenses = mysqli_fetch_assoc($result_expenses);
+
+    // echo '<pre>';
+    // print_r($row_expenses);
+    // echo '</pre>';
+    // exit;
+
+    $total_gastos = floatval($row_expenses['total'] ?? 0);
+    mysqli_stmt_close($stmt_expenses);
+    
+    // If result is 0, try without activa filter as fallback
+    if ($total_gastos == 0) {
+        $sql_expenses_fallback = "SELECT COALESCE(SUM(t.monto), 0) as total
+                                  FROM transacciones t
+                                  WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
+                                  AND t.fecha BETWEEN ? AND ?";
+        $stmt_fallback = mysqli_prepare($link, $sql_expenses_fallback);
+        if ($stmt_fallback) {
+            mysqli_stmt_bind_param($stmt_fallback, "iss", $user_id, $fecha_inicio, $fecha_fin);
+            mysqli_stmt_execute($stmt_fallback);
+            $result_fallback = mysqli_stmt_get_result($stmt_fallback);
+            $row_fallback = mysqli_fetch_assoc($result_fallback);
+            $total_gastos = floatval($row_fallback['total'] ?? 0);
+            mysqli_stmt_close($stmt_fallback);
+        }
+    }
+} else {
+    $total_gastos = 0;
+}
+
+// exit;
 $balance_neto = $total_ingresos - $total_gastos;
 
 // Prepare data for charts
@@ -104,8 +175,8 @@ for ($i = 5; $i >= 0; $i--) {
     $month_name = date('M Y', strtotime("-$i months"));
     
     $chart_labels[] = $month_name;
-    $chart_income[] = $monthly_income[$month] ?? 0;
-    $chart_expenses[] = $monthly_expenses[$month] ?? 0;
+    $chart_income[] = floatval($monthly_income[$month] ?? 0);
+    $chart_expenses[] = floatval($monthly_expenses[$month] ?? 0);
 }
 ?>
 <?php include 'layouts/head-main.php'; ?>
@@ -169,7 +240,7 @@ for ($i = 5; $i >= 0; $i--) {
                                                 <label class="form-label">&nbsp;</label>
                                                 <div>
                                                     <button type="submit" class="btn btn-primary me-2">Actualizar</button>
-                                                    <a href="reportes.php" class="btn btn-outline-secondary">Resetear</a>
+                                                    <a href="reportes.php" class="btn btn-outline-secondary">Limpiar</a>
                                                 </div>
                                             </div>
                                         </div>
@@ -190,8 +261,21 @@ for ($i = 5; $i >= 0; $i--) {
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-success fs-14 mb-0">
-                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> +$<?php echo number_format($total_ingresos, 2); ?>
+                                                <i class="ri-arrow-up-line fs-13 align-middle"></i> $<?php echo number_format($total_ingresos, 2); ?>
                                             </h5>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($total_ingresos, 2); ?></h4>
+                                            <span class="badge bg-success-subtle text-success mb-0">
+                                                <i class="ri-arrow-up-line align-middle"></i> Ingresos
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-success rounded fs-3">
+                                                <i class="ri-arrow-up-line text-success"></i>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -206,8 +290,21 @@ for ($i = 5; $i >= 0; $i--) {
                                         </div>
                                         <div class="flex-shrink-0">
                                             <h5 class="text-danger fs-14 mb-0">
-                                                <i class="ri-arrow-down-line fs-13 align-middle"></i> -$<?php echo number_format($total_gastos, 2); ?>
+                                                <i class="ri-arrow-down-line fs-13 align-middle"></i> $<?php echo number_format($total_gastos, 2); ?>
                                             </h5>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($total_gastos, 2); ?></h4>
+                                            <span class="badge bg-danger-subtle text-danger mb-0">
+                                                <i class="ri-arrow-down-line align-middle"></i> Gastos
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-danger rounded fs-3">
+                                                <i class="ri-arrow-down-line text-danger"></i>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -224,6 +321,19 @@ for ($i = 5; $i >= 0; $i--) {
                                             <h5 class="<?php echo $balance_neto >= 0 ? 'text-success' : 'text-danger'; ?> fs-14 mb-0">
                                                 <i class="ri-<?php echo $balance_neto >= 0 ? 'arrow-up' : 'arrow-down'; ?>-line fs-13 align-middle"></i> $<?php echo number_format($balance_neto, 2); ?>
                                             </h5>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-end justify-content-between mt-4">
+                                        <div>
+                                            <h4 class="fs-22 fw-semibold ff-secondary mb-4">$<?php echo number_format($balance_neto, 2); ?></h4>
+                                            <span class="badge <?php echo $balance_neto >= 0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?> mb-0">
+                                                <i class="ri-<?php echo $balance_neto >= 0 ? 'arrow-up' : 'arrow-down'; ?>-line align-middle"></i> <?php echo $balance_neto >= 0 ? 'Positivo' : 'Negativo'; ?>
+                                            </span>
+                                        </div>
+                                        <div class="avatar-sm flex-shrink-0">
+                                            <span class="avatar-title bg-soft-<?php echo $balance_neto >= 0 ? 'success' : 'danger'; ?> rounded fs-3">
+                                                <i class="ri-<?php echo $balance_neto >= 0 ? 'arrow-up' : 'arrow-down'; ?>-line text-<?php echo $balance_neto >= 0 ? 'success' : 'danger'; ?>"></i>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -387,7 +497,7 @@ for ($i = 5; $i >= 0; $i--) {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+                                return context.dataset.label + ': $' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                             }
                         }
                     }
@@ -396,13 +506,14 @@ for ($i = 5; $i >= 0; $i--) {
         });
 
         // Category Chart
-        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        const categoryCtx = document.getElementById('categoryChart');
+        <?php if (!empty($expenses_by_category)): ?>
         new Chart(categoryCtx, {
             type: 'doughnut',
             data: {
                 labels: <?php echo json_encode(array_column($expenses_by_category, 'nombre')); ?>,
                 datasets: [{
-                    data: <?php echo json_encode(array_column($expenses_by_category, 'total')); ?>,
+                    data: <?php echo json_encode(array_map('floatval', array_column($expenses_by_category, 'total'))); ?>,
                     backgroundColor: <?php echo json_encode(array_column($expenses_by_category, 'color')); ?>,
                     borderWidth: 0
                 }]
@@ -418,14 +529,18 @@ for ($i = 5; $i >= 0; $i--) {
                         callbacks: {
                             label: function(context) {
                                 const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                return context.label + ': $' + context.parsed.toLocaleString() + ' (' + percentage + '%)';
+                                const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+                                return context.label + ': $' + context.parsed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' (' + percentage + '%)';
                             }
                         }
                     }
                 }
             }
         });
+        <?php else: ?>
+        // No data to display
+        categoryCtx.getContext('2d').fillText('No hay datos disponibles', 10, 10);
+        <?php endif; ?>
     </script>
 
     <!-- App js -->
