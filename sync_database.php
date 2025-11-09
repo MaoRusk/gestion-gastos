@@ -17,11 +17,11 @@
 // Si quieres sincronizar a producción, cambia estas variables de entorno
 // o modifica directamente los valores aquí
 $TARGET_DB_TYPE = getenv('TARGET_DB_TYPE') ?: 'postgresql'; // 'postgresql', 'mysql', 'sqlite'
-$TARGET_DB_HOST = getenv('TARGET_DB_HOST') ?: 'localhost';
+$TARGET_DB_HOST = getenv('DB_HOST') ?: 'localhost';
 $TARGET_DB_PORT = getenv('TARGET_DB_PORT') ?: '5432';
 $TARGET_DB_NAME = getenv('TARGET_DB_NAME') ?: 'fime_gastos_db';
-$TARGET_DB_USER = getenv('TARGET_DB_USER') ?: 'root';
-$TARGET_DB_PASS = getenv('TARGET_DB_PASS') ?: '1234';
+$TARGET_DB_USER = getenv('DB_USER') ?: 'root';
+$TARGET_DB_PASS = getenv('DB_PASSWORD') ?: '1234';
 
 // Incluir configuración para obtener conexión LOCAL
 require_once "layouts/config.php";
