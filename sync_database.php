@@ -119,6 +119,10 @@ header('Content-Type: text/html; charset=utf-8');
                     try {
                         $source_stmt = $source_pdo->query("SELECT * FROM \"$table\"");
                         $rows = $source_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                        echo '<pre>';
+                        print_r($rows);
+                        echo '</pre>';
                         
                         if (empty($rows)) {
                             echo "<p class='info'>⏭️ Tabla $table está vacía en origen, omitiendo...</p><br>";
