@@ -28,9 +28,11 @@ if (isset($link) && isset($link->pdo)) {
     // Since we're using PDO (link->pdo exists), the native mysqli_prepare won't work with stdClass $link
     // 
     // CRITICAL: When using PDO, we need to define this function even if mysqli extension is loaded
-    // If mysqli is loaded, we can't redefine, so we'll try to define and catch any errors
+    // If mysqli is loaded, we can't redefine, so we need a workaround
     
-    if (!function_exists('mysqli_prepare')) {
+    $mysqli_loaded = function_exists('mysqli_prepare');
+    
+    if (!$mysqli_loaded) {
         // mysqli not loaded - define our function normally
         function mysqli_prepare($link, $query) {
             global $pdo_connection;
@@ -39,15 +41,36 @@ if (isset($link) && isset($link->pdo)) {
             }
             return false;
         }
+    } else {
+        // mysqli is loaded - we can't redefine mysqli_prepare
+        // Solution: Create wrapper functions with different names that check link type
+        // Then we'll need to modify code to use these wrappers when PDO is detected
+        // OR: Use a global flag to route calls correctly
+        
+        // Create a wrapper function that checks link type at runtime
+        // This will be used by code that detects PDO connections
+        if (!function_exists('_pdo_compat_mysqli_prepare')) {
+            function _pdo_compat_mysqli_prepare($link, $query) {
+                global $pdo_connection;
+                // If link has pdo property (PDO connection), use PDO
+                if (isset($link->pdo)) {
+                    return $pdo_connection->prepare($query);
+                }
+                // Otherwise, try native mysqli (shouldn't happen when using PDO)
+                if ($link instanceof mysqli) {
+                    return mysqli_prepare($link, $query);
+                }
+                return false;
+            }
+        }
+        
+        // Since we can't override mysqli_prepare, we need to intercept calls
+        // We'll use output buffering and function name aliasing, OR
+        // we'll modify the calling code to check link type first
+        
+        // Better solution: Create a helper that routes correctly based on link type
+        // The code should check if link->pdo exists before calling mysqli functions
     }
-    // Note: If mysqli_prepare already exists (mysqli extension loaded),
-    // we cannot redefine it in PHP. This means:
-    // 1. On Render.com with PostgreSQL: mysqli extension should NOT be loaded
-    // 2. OR we need to modify code to check link type before calling mysqli_prepare
-    // 
-    // For now, if mysqli is loaded, the native function will be called
-    // and it will fail with TypeError when $link is stdClass
-    // The error message will indicate the problem clearly
     
     if (!function_exists('mysqli_stmt_bind_param')) {
         function mysqli_stmt_bind_param($stmt, $types, ...$params) {

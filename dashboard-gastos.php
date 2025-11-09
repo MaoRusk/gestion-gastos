@@ -27,14 +27,21 @@ $sql_balance = "SELECT COALESCE(SUM(balance_actual), 0) as balance_total
                FROM cuentas_bancarias 
                WHERE usuario_id = ? AND " . $activaCondition;
 
-$stmt_balance = mysqli_prepare($link, $sql_balance);
-mysqli_stmt_bind_param($stmt_balance, "i", $user_id);
-mysqli_stmt_execute($stmt_balance);
-
-$result_balance = mysqli_stmt_get_result($stmt_balance);
-$balance_data = mysqli_fetch_assoc($result_balance);
-$balance_total = floatval($balance_data['balance_total'] ?? 0);
-mysqli_stmt_close($stmt_balance);
+// Use PDO directly if available, otherwise use mysqli compatibility functions
+if (isset($link->pdo)) {
+    $stmt_balance = $link->pdo->prepare($sql_balance);
+    $stmt_balance->execute([$user_id]);
+    $balance_data = $stmt_balance->fetch(PDO::FETCH_ASSOC);
+    $balance_total = floatval($balance_data['balance_total'] ?? 0);
+} else {
+    $stmt_balance = mysqli_prepare($link, $sql_balance);
+    mysqli_stmt_bind_param($stmt_balance, "i", $user_id);
+    mysqli_stmt_execute($stmt_balance);
+    $result_balance = mysqli_stmt_get_result($stmt_balance);
+    $balance_data = mysqli_fetch_assoc($result_balance);
+    $balance_total = floatval($balance_data['balance_total'] ?? 0);
+    mysqli_stmt_close($stmt_balance);
+}
 
 // 2. Ingresos del mes actual (compatible con todas las BD)
 $sql_ingresos = "SELECT COALESCE(SUM(monto), 0) as total_ingresos 
@@ -44,14 +51,20 @@ $sql_ingresos = "SELECT COALESCE(SUM(monto), 0) as total_ingresos
                 AND fecha >= ?
                 AND " . $activaCondition;
 
-$stmt_ingresos = mysqli_prepare($link, $sql_ingresos);
-mysqli_stmt_bind_param($stmt_ingresos, "is", $user_id, $fecha_inicio_mes);
-mysqli_stmt_execute($stmt_ingresos);
-
-$result_ingresos = mysqli_stmt_get_result($stmt_ingresos);
-$ingresos_data = mysqli_fetch_assoc($result_ingresos);
-$total_ingresos = floatval($ingresos_data['total_ingresos'] ?? 0);
-mysqli_stmt_close($stmt_ingresos);
+if (isset($link->pdo)) {
+    $stmt_ingresos = $link->pdo->prepare($sql_ingresos);
+    $stmt_ingresos->execute([$user_id, $fecha_inicio_mes]);
+    $ingresos_data = $stmt_ingresos->fetch(PDO::FETCH_ASSOC);
+    $total_ingresos = floatval($ingresos_data['total_ingresos'] ?? 0);
+} else {
+    $stmt_ingresos = mysqli_prepare($link, $sql_ingresos);
+    mysqli_stmt_bind_param($stmt_ingresos, "is", $user_id, $fecha_inicio_mes);
+    mysqli_stmt_execute($stmt_ingresos);
+    $result_ingresos = mysqli_stmt_get_result($stmt_ingresos);
+    $ingresos_data = mysqli_fetch_assoc($result_ingresos);
+    $total_ingresos = floatval($ingresos_data['total_ingresos'] ?? 0);
+    mysqli_stmt_close($stmt_ingresos);
+}
 
 // 3. Gastos del mes actual (compatible con todas las BD)
 $sql_gastos = "SELECT COALESCE(SUM(monto), 0) as total_gastos 
@@ -61,14 +74,20 @@ $sql_gastos = "SELECT COALESCE(SUM(monto), 0) as total_gastos
               AND fecha >= ?
               AND " . $activaCondition;
 
-$stmt_gastos = mysqli_prepare($link, $sql_gastos);
-mysqli_stmt_bind_param($stmt_gastos, "is", $user_id, $fecha_inicio_mes);
-mysqli_stmt_execute($stmt_gastos);
-
-$result_gastos = mysqli_stmt_get_result($stmt_gastos);
-$gastos_data = mysqli_fetch_assoc($result_gastos);
-$total_gastos = floatval($gastos_data['total_gastos'] ?? 0);
-mysqli_stmt_close($stmt_gastos);
+if (isset($link->pdo)) {
+    $stmt_gastos = $link->pdo->prepare($sql_gastos);
+    $stmt_gastos->execute([$user_id, $fecha_inicio_mes]);
+    $gastos_data = $stmt_gastos->fetch(PDO::FETCH_ASSOC);
+    $total_gastos = floatval($gastos_data['total_gastos'] ?? 0);
+} else {
+    $stmt_gastos = mysqli_prepare($link, $sql_gastos);
+    mysqli_stmt_bind_param($stmt_gastos, "is", $user_id, $fecha_inicio_mes);
+    mysqli_stmt_execute($stmt_gastos);
+    $result_gastos = mysqli_stmt_get_result($stmt_gastos);
+    $gastos_data = mysqli_fetch_assoc($result_gastos);
+    $total_gastos = floatval($gastos_data['total_gastos'] ?? 0);
+    mysqli_stmt_close($stmt_gastos);
+}
 
 // 4. Ahorro del mes (Ingresos - Gastos)
 $ahorro_mes = $total_ingresos - $total_gastos;
@@ -94,16 +113,24 @@ $sql_ingresos_meses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(monto), 0)
                       GROUP BY mes
                       ORDER BY mes";
 
-$stmt_ingresos_meses = mysqli_prepare($link, $sql_ingresos_meses);
-mysqli_stmt_bind_param($stmt_ingresos_meses, "is", $user_id, $six_months_ago);
-mysqli_stmt_execute($stmt_ingresos_meses);
-
-$result_ingresos_meses = mysqli_stmt_get_result($stmt_ingresos_meses);
-$ingresos_por_mes = [];
-while ($row = mysqli_fetch_assoc($result_ingresos_meses)) {
-    $ingresos_por_mes[$row['mes']] = floatval($row['total']);
+if (isset($link->pdo)) {
+    $stmt_ingresos_meses = $link->pdo->prepare($sql_ingresos_meses);
+    $stmt_ingresos_meses->execute([$user_id, $six_months_ago]);
+    $ingresos_por_mes = [];
+    while ($row = $stmt_ingresos_meses->fetch(PDO::FETCH_ASSOC)) {
+        $ingresos_por_mes[$row['mes']] = floatval($row['total']);
+    }
+} else {
+    $stmt_ingresos_meses = mysqli_prepare($link, $sql_ingresos_meses);
+    mysqli_stmt_bind_param($stmt_ingresos_meses, "is", $user_id, $six_months_ago);
+    mysqli_stmt_execute($stmt_ingresos_meses);
+    $result_ingresos_meses = mysqli_stmt_get_result($stmt_ingresos_meses);
+    $ingresos_por_mes = [];
+    while ($row = mysqli_fetch_assoc($result_ingresos_meses)) {
+        $ingresos_por_mes[$row['mes']] = floatval($row['total']);
+    }
+    mysqli_stmt_close($stmt_ingresos_meses);
 }
-mysqli_stmt_close($stmt_ingresos_meses);
 
 $sql_gastos_meses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(monto), 0) as total
                     FROM transacciones 
@@ -114,16 +141,24 @@ $sql_gastos_meses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(monto), 0) a
                     GROUP BY mes
                     ORDER BY mes";
 
-$stmt_gastos_meses = mysqli_prepare($link, $sql_gastos_meses);
-mysqli_stmt_bind_param($stmt_gastos_meses, "is", $user_id, $six_months_ago);
-mysqli_stmt_execute($stmt_gastos_meses);
-
-$result_gastos_meses = mysqli_stmt_get_result($stmt_gastos_meses);
-$gastos_por_mes = [];
-while ($row = mysqli_fetch_assoc($result_gastos_meses)) {
-    $gastos_por_mes[$row['mes']] = floatval($row['total']);
+if (isset($link->pdo)) {
+    $stmt_gastos_meses = $link->pdo->prepare($sql_gastos_meses);
+    $stmt_gastos_meses->execute([$user_id, $six_months_ago]);
+    $gastos_por_mes = [];
+    while ($row = $stmt_gastos_meses->fetch(PDO::FETCH_ASSOC)) {
+        $gastos_por_mes[$row['mes']] = floatval($row['total']);
+    }
+} else {
+    $stmt_gastos_meses = mysqli_prepare($link, $sql_gastos_meses);
+    mysqli_stmt_bind_param($stmt_gastos_meses, "is", $user_id, $six_months_ago);
+    mysqli_stmt_execute($stmt_gastos_meses);
+    $result_gastos_meses = mysqli_stmt_get_result($stmt_gastos_meses);
+    $gastos_por_mes = [];
+    while ($row = mysqli_fetch_assoc($result_gastos_meses)) {
+        $gastos_por_mes[$row['mes']] = floatval($row['total']);
+    }
+    mysqli_stmt_close($stmt_gastos_meses);
 }
-mysqli_stmt_close($stmt_gastos_meses);
 
 // Generar array de los últimos 6 meses con datos
 $meses_labels = [];
@@ -154,22 +189,36 @@ $sql_gastos_categoria = "SELECT c.nombre, c.color, COALESCE(SUM(t.monto), 0) as 
                          ORDER BY total DESC
                          LIMIT 10";
 
-$stmt_gastos_categoria = mysqli_prepare($link, $sql_gastos_categoria);
-mysqli_stmt_bind_param($stmt_gastos_categoria, "is", $user_id, $six_months_ago);
-mysqli_stmt_execute($stmt_gastos_categoria);
-
-$result_gastos_categoria = mysqli_stmt_get_result($stmt_gastos_categoria);
-$gastos_por_categoria = [];
-$total_gastos_categorias = 0;
-while ($row = mysqli_fetch_assoc($result_gastos_categoria)) {
-    $gastos_por_categoria[] = [
-        'nombre' => $row['nombre'],
-        'total' => floatval($row['total']),
-        'color' => $row['color'] ?: '#405189'
-    ];
-    $total_gastos_categorias += floatval($row['total']);
+if (isset($link->pdo)) {
+    $stmt_gastos_categoria = $link->pdo->prepare($sql_gastos_categoria);
+    $stmt_gastos_categoria->execute([$user_id, $six_months_ago]);
+    $gastos_por_categoria = [];
+    $total_gastos_categorias = 0;
+    while ($row = $stmt_gastos_categoria->fetch(PDO::FETCH_ASSOC)) {
+        $gastos_por_categoria[] = [
+            'nombre' => $row['nombre'],
+            'total' => floatval($row['total']),
+            'color' => $row['color'] ?: '#405189'
+        ];
+        $total_gastos_categorias += floatval($row['total']);
+    }
+} else {
+    $stmt_gastos_categoria = mysqli_prepare($link, $sql_gastos_categoria);
+    mysqli_stmt_bind_param($stmt_gastos_categoria, "is", $user_id, $six_months_ago);
+    mysqli_stmt_execute($stmt_gastos_categoria);
+    $result_gastos_categoria = mysqli_stmt_get_result($stmt_gastos_categoria);
+    $gastos_por_categoria = [];
+    $total_gastos_categorias = 0;
+    while ($row = mysqli_fetch_assoc($result_gastos_categoria)) {
+        $gastos_por_categoria[] = [
+            'nombre' => $row['nombre'],
+            'total' => floatval($row['total']),
+            'color' => $row['color'] ?: '#405189'
+        ];
+        $total_gastos_categorias += floatval($row['total']);
+    }
+    mysqli_stmt_close($stmt_gastos_categoria);
 }
-mysqli_stmt_close($stmt_gastos_categoria);
 
 // Calcular porcentajes para la gráfica
 $gastos_categoria_labels = [];
@@ -191,13 +240,18 @@ $sql_transacciones = "SELECT t.descripcion, t.monto, t.tipo, t.fecha, c.nombre a
                      ORDER BY t.fecha DESC, t.id DESC 
                      LIMIT 5";
 
-$stmt_transacciones = mysqli_prepare($link, $sql_transacciones);
-mysqli_stmt_bind_param($stmt_transacciones, "i", $user_id);
-mysqli_stmt_execute($stmt_transacciones);
-
-$result_transacciones = mysqli_stmt_get_result($stmt_transacciones);
-$transacciones = mysqli_fetch_all($result_transacciones, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt_transacciones);
+if (isset($link->pdo)) {
+    $stmt_transacciones = $link->pdo->prepare($sql_transacciones);
+    $stmt_transacciones->execute([$user_id]);
+    $transacciones = $stmt_transacciones->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt_transacciones = mysqli_prepare($link, $sql_transacciones);
+    mysqli_stmt_bind_param($stmt_transacciones, "i", $user_id);
+    mysqli_stmt_execute($stmt_transacciones);
+    $result_transacciones = mysqli_stmt_get_result($stmt_transacciones);
+    $transacciones = mysqli_fetch_all($result_transacciones, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt_transacciones);
+}
 
 // Función para formatear moneda
 function formatCurrency($amount) {
