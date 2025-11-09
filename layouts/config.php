@@ -119,9 +119,42 @@ $gmailpassword = ''; // YOUR gmail password
 $gmailusername = ''; // YOUR gmail User name
 
 // Include database compatibility functions if needed
-// Load when using PDO (SQLite, PostgreSQL, or MySQL via PDO) or when mysqli is not available
-if (isset($link) && (isset($link->pdo) || (!extension_loaded('mysqli') && (extension_loaded('pdo_mysql') || extension_loaded('pdo_sqlite') || extension_loaded('pdo_pgsql'))))) {
-    require_once 'includes/database_compat.php';
+// CRITICAL: When using PDO (link->pdo exists), we MUST load compatibility functions
+// BEFORE any mysqli functions are called, because native mysqli won't work with stdClass $link
+if (isset($link) && isset($link->pdo)) {
+    // Using PDO - MUST load compatibility functions
+    // Check if mysqli extension is loaded - this will cause conflicts
+    if (extension_loaded('mysqli') && function_exists('mysqli_prepare')) {
+        // mysqli is loaded but we're using PDO - this will cause TypeError
+        // The native mysqli_prepare expects mysqli object, not stdClass
+        // Show clear error message to user
+        die("
+        <html>
+        <head><title>Error de Configuración</title></head>
+        <body style='font-family: Arial, sans-serif; padding: 40px;'>
+            <h1 style='color: #dc3545;'>❌ Error de Configuración de Base de Datos</h1>
+            <p><strong>Problema detectado:</strong> La extensión mysqli está cargada pero estás usando PostgreSQL con PDO.</p>
+            <p>Esto causará errores de tipo (TypeError) cuando se llame a funciones mysqli con objetos stdClass.</p>
+            <h2>🔧 Solución para Render.com:</h2>
+            <ol>
+                <li>Ve a la configuración de tu servicio en Render.com</li>
+                <li>En las variables de entorno o configuración de PHP, asegúrate de que la extensión mysqli NO esté habilitada</li>
+                <li>O usa una imagen de PHP que no incluya mysqli por defecto</li>
+                <li>Reinicia el servicio después de hacer los cambios</li>
+            </ol>
+            <p><strong>Alternativa:</strong> Si no puedes deshabilitar mysqli, necesitarás modificar el código para usar PDO directamente en lugar de las funciones mysqli_*.</p>
+            <hr>
+            <p style='color: #666; font-size: 12px;'>Tipo de BD detectado: " . (isset($link->type) ? $link->type : 'desconocido') . "<br>
+            Extensión mysqli cargada: Sí<br>
+            Extensión PDO PostgreSQL cargada: " . (extension_loaded('pdo_pgsql') ? 'Sí' : 'No') . "</p>
+        </body>
+        </html>
+        ");
+    }
+    require_once __DIR__ . '/../includes/database_compat.php';
+} elseif (isset($link) && !extension_loaded('mysqli') && (extension_loaded('pdo_mysql') || extension_loaded('pdo_sqlite') || extension_loaded('pdo_pgsql'))) {
+    // Not using PDO but mysqli not available and PDO is available
+    require_once __DIR__ . '/../includes/database_compat.php';
 }
 
 ?>

@@ -15,9 +15,23 @@ if (isset($link) && isset($link->pdo)) {
     $pdo_connection = $link->pdo;
     
     // Create mysqli-like functions using PDO
-    // These will override any existing mysqli functions only when using PDO
+    // When using PDO with stdClass $link, we MUST use these compatibility functions
+    // The native mysqli functions won't work with stdClass, so we define our own
+    
+    // When using PDO (link->pdo exists), we MUST define compatibility functions
+    // The native mysqli functions won't work with stdClass $link
+    // 
+    // IMPORTANT: When using PDO, these functions MUST be defined, even if mysqli extension is loaded
+    // If mysqli is loaded, the native mysqli_prepare will fail with stdClass, so we need our version
+    
+    // Define mysqli_prepare - When using PDO, we MUST have this function
+    // Since we're using PDO (link->pdo exists), the native mysqli_prepare won't work with stdClass $link
+    // 
+    // CRITICAL: When using PDO, we need to define this function even if mysqli extension is loaded
+    // If mysqli is loaded, we can't redefine, so we'll try to define and catch any errors
     
     if (!function_exists('mysqli_prepare')) {
+        // mysqli not loaded - define our function normally
         function mysqli_prepare($link, $query) {
             global $pdo_connection;
             if (isset($link->pdo)) {
@@ -26,6 +40,14 @@ if (isset($link) && isset($link->pdo)) {
             return false;
         }
     }
+    // Note: If mysqli_prepare already exists (mysqli extension loaded),
+    // we cannot redefine it in PHP. This means:
+    // 1. On Render.com with PostgreSQL: mysqli extension should NOT be loaded
+    // 2. OR we need to modify code to check link type before calling mysqli_prepare
+    // 
+    // For now, if mysqli is loaded, the native function will be called
+    // and it will fail with TypeError when $link is stdClass
+    // The error message will indicate the problem clearly
     
     if (!function_exists('mysqli_stmt_bind_param')) {
         function mysqli_stmt_bind_param($stmt, $types, ...$params) {
