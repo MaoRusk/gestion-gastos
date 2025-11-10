@@ -17,6 +17,7 @@ $is_view = ($mode === 'view' && $id > 0);
 
 // If editing or viewing, load the existing account and ensure ownership
 if (($is_edit || $is_view) && $id > 0) {
+
     $sql = "SELECT * FROM cuentas_bancarias WHERE id = ? LIMIT 1";
     if (isset($link->pdo)) {
         $stmt = $link->pdo->prepare($sql);
@@ -42,30 +43,30 @@ if (($is_edit || $is_view) && $id > 0) {
         die('No tienes permiso para ver/editar esta cuenta');
     }
 
-        // Prefill variables from DB when editing or viewing
-        $nombre = $row['nombre'];
-        // Map DB 'tipo' values to the form's option values when possible
-        $raw_tipo = strtolower(trim($row['tipo'] ?? ''));
-        $tipo_map = [
-            'corriente' => 'cuenta_corriente',
-            'cuenta_corriente' => 'cuenta_corriente',
-            'ahorros' => 'cuenta_ahorros',
-            'cuenta_ahorros' => 'cuenta_ahorros',
-            'tarjeta_credito' => 'tarjeta_credito',
-            'credito' => 'tarjeta_credito',
-            'tarjeta' => 'tarjeta_credito',
-            'efectivo' => 'efectivo',
-            'inversion' => 'inversion',
-            'inversión' => 'inversion'
-        ];
-        $tipo = isset($tipo_map[$raw_tipo]) ? $tipo_map[$raw_tipo] : ($row['tipo'] ?? '');
-        $banco = $row['banco'];
-        $numero_cuenta = $row['numero_cuenta'];
-        // Use balance_actual as balance_inicial for display
-        $balance_inicial = isset($row['balance_actual']) ? $row['balance_actual'] : '';
-        $limite_credito = $row['limite_credito'];
-    }
+    // Prefill variables from DB when editing or viewing
+    $nombre = $row['nombre'];
+    // Map DB 'tipo' values to the form's option values when possible
+    $raw_tipo = strtolower(trim($row['tipo'] ?? ''));
+    $tipo_map = [
+        'corriente' => 'cuenta_corriente',
+        'cuenta_corriente' => 'cuenta_corriente',
+        'ahorros' => 'cuenta_ahorros',
+        'cuenta_ahorros' => 'cuenta_ahorros',
+        'tarjeta_credito' => 'tarjeta_credito',
+        'credito' => 'tarjeta_credito',
+        'tarjeta' => 'tarjeta_credito',
+        'efectivo' => 'efectivo',
+        'inversion' => 'inversion',
+        'inversión' => 'inversion'
+    ];
+    $tipo = isset($tipo_map[$raw_tipo]) ? $tipo_map[$raw_tipo] : ($row['tipo'] ?? '');
+    $banco = $row['banco'];
+    $numero_cuenta = $row['numero_cuenta'];
+    // Use balance_actual as balance_inicial for display
+    $balance_inicial = isset($row['balance_actual']) ? $row['balance_actual'] : '';
+    $limite_credito = $row['limite_credito'];
 }
+
 
 // Define variables and initialize with empty values (preserve any prefilled values from DB)
 $nombre = isset($nombre) ? $nombre : '';
