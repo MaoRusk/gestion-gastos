@@ -12,18 +12,27 @@ requireAuth();
 // Get user's categories
 $user_id = getCurrentUserId();
 
+// Detectar tipo de base de datos para compatibilidad
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+
 // Build DB-aware boolean conditions (Postgres uses TRUE/FALSE, MySQL uses 1/0)
-$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
-$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
+$predefCondition = $isPostgres ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
+$activeCondition = $isPostgres ? 'c.activa = TRUE' : 'c.activa = 1';
 
 // Get categories: either owned by the user OR pre-defined, and active
 $sql = "SELECT * FROM categorias c WHERE (c.usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition . " ORDER BY tipo, nombre";
-$stmt = mysqli_prepare($link, $sql);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql);
+    $stmt->execute([$user_id]);
+    $categorias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Group categories by type
 $categorias_por_tipo = [];

@@ -27,35 +27,40 @@ $success_message = "";
 // If editing or viewing, load category and prefill
 if (($is_edit || $is_view) && $id > 0) {
     $sql = "SELECT * FROM categorias WHERE id = ? LIMIT 1";
-    if ($stmt = mysqli_prepare($link, $sql)) {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($sql);
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $stmt = mysqli_prepare($link, $sql);
         mysqli_stmt_bind_param($stmt, 'i', $id);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         $row = mysqli_fetch_assoc($res);
         mysqli_stmt_close($stmt);
-
-        if (!$row) {
-            header('Location: categorias-lista.php');
-            exit;
-        }
-
-        // Ownership check: predefinidas shouldn't be editable
-        if ($row['es_predefinida']) {
-            if ($is_edit) die('No puedes editar una categoría predefinida');
-            // viewing predefinida is allowed
-        }
-
-        if (!$row['es_predefinida'] && $row['usuario_id'] != getCurrentUserId()) {
-            die('No tienes permiso para ver/editar esta categoría');
-        }
-
-        // Prefill values
-        $nombre = $row['nombre'];
-        $tipo = $row['tipo'];
-        $color = $row['color'];
-        $icono = $row['icono'];
-        $descripcion = $row['descripcion'];
     }
+
+    if (!$row) {
+        header('Location: categorias-lista.php');
+        exit;
+    }
+
+    // Ownership check: predefinidas shouldn't be editable
+    if ($row['es_predefinida']) {
+        if ($is_edit) die('No puedes editar una categoría predefinida');
+        // viewing predefinida is allowed
+    }
+
+    if (!$row['es_predefinida'] && $row['usuario_id'] != getCurrentUserId()) {
+        die('No tienes permiso para ver/editar esta categoría');
+    }
+
+    // Prefill values
+    $nombre = $row['nombre'];
+    $tipo = $row['tipo'];
+    $color = $row['color'];
+    $icono = $row['icono'];
+    $descripcion = $row['descripcion'];
 }
 
 // Processing form data when form is submitted
@@ -100,29 +105,48 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (empty($nombre_err) && empty($tipo_err) && empty($color_err) && empty($icono_err)) {
         $user_id = getCurrentUserId();
 
+        // Detectar tipo de base de datos para compatibilidad
+        $isPostgres = isset($link->type) && $link->type === 'postgresql';
+        $esPredefValue = $isPostgres ? 'FALSE' : '0';
+        $activaValue = $isPostgres ? 'TRUE' : '1';
+
         if ($post_mode === 'edit' && $post_id > 0) {
             // Update existing category (ownership checked on GET, re-check here)
             $check_sql = "SELECT usuario_id, es_predefinida FROM categorias WHERE id = ? LIMIT 1";
-            if ($cstmt = mysqli_prepare($link, $check_sql)) {
+            if (isset($link->pdo)) {
+                $cstmt = $link->pdo->prepare($check_sql);
+                $cstmt->execute([$post_id]);
+                $crow = $cstmt->fetch(PDO::FETCH_ASSOC);
+            } else {
+                $cstmt = mysqli_prepare($link, $check_sql);
                 mysqli_stmt_bind_param($cstmt, 'i', $post_id);
                 mysqli_stmt_execute($cstmt);
                 $cres = mysqli_stmt_get_result($cstmt);
                 $crow = mysqli_fetch_assoc($cres);
                 mysqli_stmt_close($cstmt);
+            }
 
-                if (!$crow) {
-                    die('Categoría no encontrada');
-                }
-                if ($crow['es_predefinida']) {
-                    die('No puedes editar una categoría predefinida');
-                }
-                if ($crow['usuario_id'] != $user_id) {
-                    die('No tienes permiso para editar esta categoría');
-                }
+            if (!$crow) {
+                die('Categoría no encontrada');
+            }
+            if ($crow['es_predefinida']) {
+                die('No puedes editar una categoría predefinida');
+            }
+            if ($crow['usuario_id'] != $user_id) {
+                die('No tienes permiso para editar esta categoría');
             }
 
             $update_sql = "UPDATE categorias SET nombre = ?, tipo = ?, color = ?, icono = ?, descripcion = ? WHERE id = ?";
-            if ($ust = mysqli_prepare($link, $update_sql)) {
+            if (isset($link->pdo)) {
+                $ust = $link->pdo->prepare($update_sql);
+                if ($ust->execute([$nombre, $tipo, $color, $icono, $descripcion, $post_id])) {
+                    $success_message = "Categoría actualizada exitosamente!";
+                } else {
+                    $error_info = $ust->errorInfo();
+                    $success_message = "Error al actualizar: " . (isset($error_info[2]) ? $error_info[2] : 'Error desconocido');
+                }
+            } else {
+                $ust = mysqli_prepare($link, $update_sql);
                 mysqli_stmt_bind_param($ust, 'ssssis', $nombre, $tipo, $color, $icono, $descripcion, $post_id);
                 if (mysqli_stmt_execute($ust)) {
                     $success_message = "Categoría actualizada exitosamente!";
@@ -133,8 +157,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         } else {
             // Insert new category
-            $sql = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, descripcion, es_predefinida, activa) VALUES (?, ?, ?, ?, ?, ?, false, true)";
-            if ($stmt = mysqli_prepare($link, $sql)) {
+            $sql = "INSERT INTO categorias (usuario_id, nombre, tipo, color, icono, descripcion, es_predefinida, activa) VALUES (?, ?, ?, ?, ?, ?, " . $esPredefValue . ", " . $activaValue . ")";
+            if (isset($link->pdo)) {
+                $stmt = $link->pdo->prepare($sql);
+                if ($stmt->execute([$user_id, $nombre, $tipo, $color, $icono, $descripcion])) {
+                    $success_message = "Categoría creada exitosamente!";
+                    $nombre = $tipo = $color = $icono = $descripcion = "";
+                } else {
+                    $error_info = $stmt->errorInfo();
+                    $success_message = "Error: " . (isset($error_info[2]) ? $error_info[2] : 'Error desconocido');
+                }
+            } else {
+                $stmt = mysqli_prepare($link, $sql);
                 mysqli_stmt_bind_param($stmt, "isssss", $user_id, $nombre, $tipo, $color, $icono, $descripcion);
                 if (mysqli_stmt_execute($stmt)) {
                     $success_message = "Categoría creada exitosamente!";

@@ -18,9 +18,9 @@ $fecha_fin = isset($_GET['fecha_fin']) ? $_GET['fecha_fin'] : date('Y-m-t');
 
 // Get monthly income and expenses for the last 6 months (portable for SQLite/MySQL/Postgres)
 $isSqlite = isset($link->type) && $link->type === 'sqlite';
-$isPostgres = defined('DB_TYPE') && DB_TYPE === 'postgresql';
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
 $six_months_ago = date('Y-m-d', strtotime($fecha_fin . ' -6 months'));
-$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 't.activa = TRUE' : 't.activa = 1';
+$activeCondition = $isPostgres ? 't.activa = TRUE' : 't.activa = 1';
 
 if ($isSqlite) {
     $groupExpr = "strftime('%Y-%m', t.fecha)";
@@ -38,15 +38,24 @@ $sql_income = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(t.monto), 0) as to
                AND t.fecha >= ? AND " . $activeCondition . "
                GROUP BY mes
                ORDER BY mes";
-$stmt = mysqli_prepare($link, $sql_income);
-mysqli_stmt_bind_param($stmt, "is", $user_id, $six_months_ago);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$monthly_income = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $monthly_income[$row['mes']] = floatval($row['total']);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_income);
+    $stmt->execute([$user_id, $six_months_ago]);
+    $monthly_income = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $monthly_income[$row['mes']] = floatval($row['total']);
+    }
+} else {
+    $stmt = mysqli_prepare($link, $sql_income);
+    mysqli_stmt_bind_param($stmt, "is", $user_id, $six_months_ago);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $monthly_income = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $monthly_income[$row['mes']] = floatval($row['total']);
+    }
+    mysqli_stmt_close($stmt);
 }
-mysqli_stmt_close($stmt);
 
 $sql_expenses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(t.monto), 0) as total
                  FROM transacciones t
@@ -54,18 +63,27 @@ $sql_expenses = "SELECT " . $groupExpr . " as mes, COALESCE(SUM(t.monto), 0) as 
                  AND t.fecha >= ? AND " . $activeCondition . "
                  GROUP BY mes
                  ORDER BY mes";
-$stmt = mysqli_prepare($link, $sql_expenses);
-mysqli_stmt_bind_param($stmt, "is", $user_id, $six_months_ago);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$monthly_expenses = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $monthly_expenses[$row['mes']] = floatval($row['total']);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_expenses);
+    $stmt->execute([$user_id, $six_months_ago]);
+    $monthly_expenses = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $monthly_expenses[$row['mes']] = floatval($row['total']);
+    }
+} else {
+    $stmt = mysqli_prepare($link, $sql_expenses);
+    mysqli_stmt_bind_param($stmt, "is", $user_id, $six_months_ago);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $monthly_expenses = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $monthly_expenses[$row['mes']] = floatval($row['total']);
+    }
+    mysqli_stmt_close($stmt);
 }
-mysqli_stmt_close($stmt);
 
 // Get expenses by category for the selected period
-$activeCondition2 = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 't.activa = TRUE' : 't.activa = 1';
+$activeCondition2 = $isPostgres ? 't.activa = TRUE' : 't.activa = 1';
 $sql_categories = "SELECT c.nombre, c.color, COALESCE(SUM(t.monto), 0) as total
                    FROM transacciones t
                    JOIN categorias c ON t.categoria_id = c.id
@@ -73,12 +91,18 @@ $sql_categories = "SELECT c.nombre, c.color, COALESCE(SUM(t.monto), 0) as total
                    AND t.fecha BETWEEN ? AND ? AND " . $activeCondition2 . "
                    GROUP BY c.id, c.nombre, c.color
                    ORDER BY total DESC";
-$stmt = mysqli_prepare($link, $sql_categories);
-mysqli_stmt_bind_param($stmt, "iss", $user_id, $fecha_inicio, $fecha_fin);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$expenses_by_category = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_categories);
+    $stmt->execute([$user_id, $fecha_inicio, $fecha_fin]);
+    $expenses_by_category = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql_categories);
+    mysqli_stmt_bind_param($stmt, "iss", $user_id, $fecha_inicio, $fecha_fin);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $expenses_by_category = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Ensure all totals are floats
 foreach ($expenses_by_category as &$category) {
@@ -90,7 +114,7 @@ unset($category);
 // Filter only active transactions - use separate queries for better reliability
 
 // Get total income
-if (defined('DB_TYPE') && DB_TYPE === 'postgresql') {
+if ($isPostgres) {
     $sql_income_total = "SELECT COALESCE(SUM(t.monto), 0) as total
                          FROM transacciones t
                          WHERE t.usuario_id = ? AND t.tipo = 'ingreso' 
@@ -101,21 +125,28 @@ if (defined('DB_TYPE') && DB_TYPE === 'postgresql') {
                          WHERE t.usuario_id = ? AND t.tipo = 'ingreso' 
                          AND t.fecha BETWEEN ? AND ? AND (t.activa = 1 OR t.activa IS NULL)";
 }
-$stmt_income = mysqli_prepare($link, $sql_income_total);
-if ($stmt_income) {
-    mysqli_stmt_bind_param($stmt_income, "iss", $user_id, $fecha_inicio, $fecha_fin);
-    mysqli_stmt_execute($stmt_income);
-    $result_income = mysqli_stmt_get_result($stmt_income);
-    $row_income = mysqli_fetch_assoc($result_income);
+if (isset($link->pdo)) {
+    $stmt_income = $link->pdo->prepare($sql_income_total);
+    $stmt_income->execute([$user_id, $fecha_inicio, $fecha_fin]);
+    $row_income = $stmt_income->fetch(PDO::FETCH_ASSOC);
     $total_ingresos = floatval($row_income['total'] ?? 0);
-    mysqli_stmt_close($stmt_income);
 } else {
-    $total_ingresos = 0;
+    $stmt_income = mysqli_prepare($link, $sql_income_total);
+    if ($stmt_income) {
+        mysqli_stmt_bind_param($stmt_income, "iss", $user_id, $fecha_inicio, $fecha_fin);
+        mysqli_stmt_execute($stmt_income);
+        $result_income = mysqli_stmt_get_result($stmt_income);
+        $row_income = mysqli_fetch_assoc($result_income);
+        $total_ingresos = floatval($row_income['total'] ?? 0);
+        mysqli_stmt_close($stmt_income);
+    } else {
+        $total_ingresos = 0;
+    }
 }
 
 // Get total expenses
 // Try with activa filter first, fallback without if needed
-if (defined('DB_TYPE') && DB_TYPE === 'postgresql') {
+if ($isPostgres) {
     $sql_expenses_total = "SELECT COALESCE(SUM(t.monto), 0) as total
                            FROM transacciones t
                            WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
@@ -126,21 +157,12 @@ if (defined('DB_TYPE') && DB_TYPE === 'postgresql') {
                            WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
                            AND t.fecha BETWEEN ? AND ? AND (t.activa = 1 OR t.activa IS NULL)";
 }
-$stmt_expenses = mysqli_prepare($link, $sql_expenses_total);
 
-if ($stmt_expenses) {
-    mysqli_stmt_bind_param($stmt_expenses, "iss", $user_id, $fecha_inicio, $fecha_fin);
-    mysqli_stmt_execute($stmt_expenses);
-    $result_expenses = mysqli_stmt_get_result($stmt_expenses);
-    $row_expenses = mysqli_fetch_assoc($result_expenses);
-
-    // echo '<pre>';
-    // print_r($row_expenses);
-    // echo '</pre>';
-    // exit;
-
+if (isset($link->pdo)) {
+    $stmt_expenses = $link->pdo->prepare($sql_expenses_total);
+    $stmt_expenses->execute([$user_id, $fecha_inicio, $fecha_fin]);
+    $row_expenses = $stmt_expenses->fetch(PDO::FETCH_ASSOC);
     $total_gastos = floatval($row_expenses['total'] ?? 0);
-    mysqli_stmt_close($stmt_expenses);
     
     // If result is 0, try without activa filter as fallback
     if ($total_gastos == 0) {
@@ -148,18 +170,40 @@ if ($stmt_expenses) {
                                   FROM transacciones t
                                   WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
                                   AND t.fecha BETWEEN ? AND ?";
-        $stmt_fallback = mysqli_prepare($link, $sql_expenses_fallback);
-        if ($stmt_fallback) {
-            mysqli_stmt_bind_param($stmt_fallback, "iss", $user_id, $fecha_inicio, $fecha_fin);
-            mysqli_stmt_execute($stmt_fallback);
-            $result_fallback = mysqli_stmt_get_result($stmt_fallback);
-            $row_fallback = mysqli_fetch_assoc($result_fallback);
-            $total_gastos = floatval($row_fallback['total'] ?? 0);
-            mysqli_stmt_close($stmt_fallback);
-        }
+        $stmt_fallback = $link->pdo->prepare($sql_expenses_fallback);
+        $stmt_fallback->execute([$user_id, $fecha_inicio, $fecha_fin]);
+        $row_fallback = $stmt_fallback->fetch(PDO::FETCH_ASSOC);
+        $total_gastos = floatval($row_fallback['total'] ?? 0);
     }
 } else {
-    $total_gastos = 0;
+    $stmt_expenses = mysqli_prepare($link, $sql_expenses_total);
+    if ($stmt_expenses) {
+        mysqli_stmt_bind_param($stmt_expenses, "iss", $user_id, $fecha_inicio, $fecha_fin);
+        mysqli_stmt_execute($stmt_expenses);
+        $result_expenses = mysqli_stmt_get_result($stmt_expenses);
+        $row_expenses = mysqli_fetch_assoc($result_expenses);
+        $total_gastos = floatval($row_expenses['total'] ?? 0);
+        mysqli_stmt_close($stmt_expenses);
+        
+        // If result is 0, try without activa filter as fallback
+        if ($total_gastos == 0) {
+            $sql_expenses_fallback = "SELECT COALESCE(SUM(t.monto), 0) as total
+                                      FROM transacciones t
+                                      WHERE t.usuario_id = ? AND t.tipo = 'gasto' 
+                                      AND t.fecha BETWEEN ? AND ?";
+            $stmt_fallback = mysqli_prepare($link, $sql_expenses_fallback);
+            if ($stmt_fallback) {
+                mysqli_stmt_bind_param($stmt_fallback, "iss", $user_id, $fecha_inicio, $fecha_fin);
+                mysqli_stmt_execute($stmt_fallback);
+                $result_fallback = mysqli_stmt_get_result($stmt_fallback);
+                $row_fallback = mysqli_fetch_assoc($result_fallback);
+                $total_gastos = floatval($row_fallback['total'] ?? 0);
+                mysqli_stmt_close($stmt_fallback);
+            }
+        }
+    } else {
+        $total_gastos = 0;
+    }
 }
 
 // exit;

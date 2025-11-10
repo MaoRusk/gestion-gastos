@@ -12,8 +12,11 @@ requireAuth();
 // Get user's budgets
 $user_id = getCurrentUserId();
 
+// Detectar tipo de base de datos para compatibilidad
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+
 // Get current month budgets with actual spending
-$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'p.activo = TRUE' : 'p.activo = 1';
+$activeCondition = $isPostgres ? 'p.activo = TRUE' : 'p.activo = 1';
 $sql = "SELECT p.*, c.nombre as categoria_nombre, c.color as categoria_color, c.icono as categoria_icono,
                COALESCE(SUM(t.monto), 0) as gasto_real
         FROM presupuestos p
@@ -27,12 +30,18 @@ $sql = "SELECT p.*, c.nombre as categoria_nombre, c.color as categoria_color, c.
         GROUP BY p.id, p.nombre, p.monto_limite, p.fecha_inicio, p.fecha_fin, p.categoria_id, c.nombre, c.color, c.icono
         ORDER BY p.fecha_inicio DESC";
 
-$stmt = mysqli_prepare($link, $sql);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$presupuestos = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql);
+    $stmt->execute([$user_id]);
+    $presupuestos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $presupuestos = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Calculate budget statistics
 $total_presupuesto = 0;

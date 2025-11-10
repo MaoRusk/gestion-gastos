@@ -29,62 +29,81 @@ $fecha_fin = '';
 $descripcion_err = $monto_err = $tipo_err = $categoria_err = $cuenta_err = "";
 $success_message = "";
 
+// Detectar tipo de base de datos para compatibilidad
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+$activaCondition = $isPostgres ? 'activa = TRUE' : 'activa = 1';
+$predefCondition = $isPostgres ? 'es_predefinida = TRUE' : 'es_predefinida = 1';
+
 // If editing or viewing, load the existing transaction and ensure ownership, then prefill vars
 if (($is_edit || $is_view) && $id > 0) {
     $sql = "SELECT * FROM transacciones WHERE id = ? LIMIT 1";
-    if ($stmt = mysqli_prepare($link, $sql)) {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($sql);
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $stmt = mysqli_prepare($link, $sql);
         mysqli_stmt_bind_param($stmt, 'i', $id);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         $row = mysqli_fetch_assoc($res);
         mysqli_stmt_close($stmt);
-
-        if (!$row) {
-            header('Location: transacciones-lista.php');
-            exit;
-        }
-
-        if ($row['usuario_id'] != getCurrentUserId()) {
-            die('No tienes permiso para ver/editar esta transacción');
-        }
-
-        // Prefill form values
-        $descripcion = $row['descripcion'];
-        $monto = $row['monto'];
-        $tipo = $row['tipo'];
-        $categoria_id = $row['categoria_id'];
-        $cuenta_id = $row['cuenta_id'];
-        $fecha = $row['fecha'];
-        $notas = $row['notas'];
-        $recurrente = !empty($row['recurrente']);
-        $frecuencia = $row['frecuencia'];
-        $fecha_fin = $row['fecha_fin_recurrencia'];
     }
+
+    if (!$row) {
+        header('Location: transacciones-lista.php');
+        exit;
+    }
+
+    if ($row['usuario_id'] != getCurrentUserId()) {
+        die('No tienes permiso para ver/editar esta transacción');
+    }
+
+    // Prefill form values
+    $descripcion = $row['descripcion'];
+    $monto = $row['monto'];
+    $tipo = $row['tipo'];
+    $categoria_id = $row['categoria_id'];
+    $cuenta_id = $row['cuenta_id'];
+    $fecha = $row['fecha'];
+    $notas = $row['notas'];
+    $recurrente = !empty($row['recurrente']);
+    $frecuencia = $row['frecuencia'];
+    $fecha_fin = $row['fecha_fin_recurrencia'];
 }
 
 // Get user's accounts and categories
 $user_id = getCurrentUserId();
 
 // Get accounts
-$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'cb.activa = TRUE' : 'cb.activa = 1';
-$sql_accounts = "SELECT id, nombre, tipo, balance_actual FROM cuentas_bancarias cb WHERE usuario_id = ? AND " . $activeCondition . " ORDER BY nombre";
-$stmt = mysqli_prepare($link, $sql_accounts);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$cuentas = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+$sql_accounts = "SELECT id, nombre, tipo, balance_actual FROM cuentas_bancarias cb WHERE usuario_id = ? AND " . $activaCondition . " ORDER BY nombre";
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_accounts);
+    $stmt->execute([$user_id]);
+    $cuentas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql_accounts);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $cuentas = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Get categories
-$activeCondition2 = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
-$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
-$sql_categories = "SELECT id, nombre, tipo, color, icono FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition2 . " ORDER BY tipo, nombre";
-$stmt = mysqli_prepare($link, $sql_categories);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+$sql_categories = "SELECT id, nombre, tipo, color, icono FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activaCondition . " ORDER BY tipo, nombre";
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_categories);
+    $stmt->execute([$user_id]);
+    $categorias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql_categories);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Get recent transactions for the sidebar
 $sql_recent = "SELECT t.*, c.nombre as categoria_nombre, c.color as categoria_color, c.icono as categoria_icono, 
@@ -95,12 +114,18 @@ $sql_recent = "SELECT t.*, c.nombre as categoria_nombre, c.color as categoria_co
         WHERE t.usuario_id = ?
         ORDER BY t.fecha DESC, t.fecha_creacion DESC
         LIMIT 3";
-$stmt = mysqli_prepare($link, $sql_recent);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$transacciones_recientes = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_recent);
+    $stmt->execute([$user_id]);
+    $transacciones_recientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql_recent);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $transacciones_recientes = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Processing form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -150,7 +175,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $post_id = isset($_POST['id']) ? intval($_POST['id']) : 0;
 
         // Start transaction
-        mysqli_begin_transaction($link);
+        if (isset($link->pdo)) {
+            $link->pdo->beginTransaction();
+        } else {
+            mysqli_begin_transaction($link);
+        }
 
         try {
             $recurrente = isset($_POST["recurrente"]) ? 1 : 0;
@@ -160,7 +189,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($post_mode === 'edit' && $post_id > 0) {
                 // Fetch original transaction to compute balance deltas
                 $orig = null;
-                if ($s = mysqli_prepare($link, "SELECT * FROM transacciones WHERE id = ? LIMIT 1")) {
+                if (isset($link->pdo)) {
+                    $s = $link->pdo->prepare("SELECT * FROM transacciones WHERE id = ? LIMIT 1");
+                    $s->execute([$post_id]);
+                    $orig = $s->fetch(PDO::FETCH_ASSOC);
+                } else {
+                    $s = mysqli_prepare($link, "SELECT * FROM transacciones WHERE id = ? LIMIT 1");
                     mysqli_stmt_bind_param($s, 'i', $post_id);
                     mysqli_stmt_execute($s);
                     $r = mysqli_stmt_get_result($s);
@@ -174,7 +208,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 // Update transacciones row
                 $update_sql = "UPDATE transacciones SET cuenta_id = ?, categoria_id = ?, descripcion = ?, monto = ?, tipo = ?, fecha = ?, notas = ?, recurrente = ?, frecuencia = ?, fecha_fin_recurrencia = ? WHERE id = ?";
-                if ($ust = mysqli_prepare($link, $update_sql)) {
+                if (isset($link->pdo)) {
+                    $ust = $link->pdo->prepare($update_sql);
+                    $ust->execute([$cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin, $post_id]);
+                } else {
+                    $ust = mysqli_prepare($link, $update_sql);
                     mysqli_stmt_bind_param($ust, 'iisdsiisssi', $cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin, $post_id);
                     mysqli_stmt_execute($ust);
                     mysqli_stmt_close($ust);
@@ -182,20 +220,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 // Determinar si las cuentas son deudas
                 $orig_account_type_query = "SELECT tipo FROM cuentas_bancarias WHERE id = ? LIMIT 1";
-                $orig_account_stmt = mysqli_prepare($link, $orig_account_type_query);
-                mysqli_stmt_bind_param($orig_account_stmt, "i", $orig['cuenta_id']);
-                mysqli_stmt_execute($orig_account_stmt);
-                $orig_account_result = mysqli_stmt_get_result($orig_account_stmt);
-                $orig_account_data = mysqli_fetch_assoc($orig_account_result);
-                mysqli_stmt_close($orig_account_stmt);
+                if (isset($link->pdo)) {
+                    $orig_account_stmt = $link->pdo->prepare($orig_account_type_query);
+                    $orig_account_stmt->execute([$orig['cuenta_id']]);
+                    $orig_account_data = $orig_account_stmt->fetch(PDO::FETCH_ASSOC);
+                } else {
+                    $orig_account_stmt = mysqli_prepare($link, $orig_account_type_query);
+                    mysqli_stmt_bind_param($orig_account_stmt, "i", $orig['cuenta_id']);
+                    mysqli_stmt_execute($orig_account_stmt);
+                    $orig_account_result = mysqli_stmt_get_result($orig_account_stmt);
+                    $orig_account_data = mysqli_fetch_assoc($orig_account_result);
+                    mysqli_stmt_close($orig_account_stmt);
+                }
                 
                 $new_account_type_query = "SELECT tipo FROM cuentas_bancarias WHERE id = ? LIMIT 1";
-                $new_account_stmt = mysqli_prepare($link, $new_account_type_query);
-                mysqli_stmt_bind_param($new_account_stmt, "i", $cuenta_id);
-                mysqli_stmt_execute($new_account_stmt);
-                $new_account_result = mysqli_stmt_get_result($new_account_stmt);
-                $new_account_data = mysqli_fetch_assoc($new_account_result);
-                mysqli_stmt_close($new_account_stmt);
+                if (isset($link->pdo)) {
+                    $new_account_stmt = $link->pdo->prepare($new_account_type_query);
+                    $new_account_stmt->execute([$cuenta_id]);
+                    $new_account_data = $new_account_stmt->fetch(PDO::FETCH_ASSOC);
+                } else {
+                    $new_account_stmt = mysqli_prepare($link, $new_account_type_query);
+                    mysqli_stmt_bind_param($new_account_stmt, "i", $cuenta_id);
+                    mysqli_stmt_execute($new_account_stmt);
+                    $new_account_result = mysqli_stmt_get_result($new_account_stmt);
+                    $new_account_data = mysqli_fetch_assoc($new_account_result);
+                    mysqli_stmt_close($new_account_stmt);
+                }
                 
                 $orig_is_debt = in_array($orig_account_data['tipo'] ?? '', ['tarjeta_credito', 'prestamo_personal']);
                 $new_is_debt = in_array($new_account_data['tipo'] ?? '', ['tarjeta_credito', 'prestamo_personal']);
@@ -216,34 +266,106 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($orig['cuenta_id'] == $cuenta_id) {
                     $delta = $new_change - $orig_change;
                     if ($delta != 0) {
-                        $upd = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
-                        mysqli_stmt_bind_param($upd, 'di', $delta, $cuenta_id);
-                        mysqli_stmt_execute($upd);
-                        mysqli_stmt_close($upd);
+                        if (isset($link->pdo)) {
+                            $upd = $link->pdo->prepare("UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
+                            $upd->execute([$delta, $cuenta_id]);
+                        } else {
+                            $upd = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
+                            mysqli_stmt_bind_param($upd, 'di', $delta, $cuenta_id);
+                            mysqli_stmt_execute($upd);
+                            mysqli_stmt_close($upd);
+                        }
                     }
                 } else {
                     // Revert original on old account
-                    $revert = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual - ? WHERE id = ?");
-                    mysqli_stmt_bind_param($revert, 'di', $orig_change, $orig['cuenta_id']);
-                    mysqli_stmt_execute($revert);
-                    mysqli_stmt_close($revert);
+                    if (isset($link->pdo)) {
+                        $revert = $link->pdo->prepare("UPDATE cuentas_bancarias SET balance_actual = balance_actual - ? WHERE id = ?");
+                        $revert->execute([$orig_change, $orig['cuenta_id']]);
+                    } else {
+                        $revert = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual - ? WHERE id = ?");
+                        mysqli_stmt_bind_param($revert, 'di', $orig_change, $orig['cuenta_id']);
+                        mysqli_stmt_execute($revert);
+                        mysqli_stmt_close($revert);
+                    }
 
                     // Apply new change to new account
-                    $apply = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
-                    mysqli_stmt_bind_param($apply, 'di', $new_change, $cuenta_id);
-                    mysqli_stmt_execute($apply);
-                    mysqli_stmt_close($apply);
+                    if (isset($link->pdo)) {
+                        $apply = $link->pdo->prepare("UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
+                        $apply->execute([$new_change, $cuenta_id]);
+                    } else {
+                        $apply = mysqli_prepare($link, "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?");
+                        mysqli_stmt_bind_param($apply, 'di', $new_change, $cuenta_id);
+                        mysqli_stmt_execute($apply);
+                        mysqli_stmt_close($apply);
+                    }
                 }
 
                 // Note: transfer records table not updated here (out of scope)
 
-                mysqli_commit($link);
+                if (isset($link->pdo)) {
+                    $link->pdo->commit();
+                } else {
+                    mysqli_commit($link);
+                }
                 $success_message = "Transacción actualizada exitosamente!";
 
             } else {
                 // Insert transaction
                 $sql = "INSERT INTO transacciones (usuario_id, cuenta_id, categoria_id, descripcion, monto, tipo, fecha, notas, recurrente, frecuencia, fecha_fin_recurrencia) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                if ($stmt = mysqli_prepare($link, $sql)) {
+                if (isset($link->pdo)) {
+                    $stmt = $link->pdo->prepare($sql);
+                    if ($stmt->execute([$user_id, $cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin])) {
+                        $transaction_id = $link->pdo->lastInsertId();
+
+                        // Determinar si la cuenta es una deuda (tarjeta_credito o prestamo_personal)
+                        $account_type_query = "SELECT tipo FROM cuentas_bancarias WHERE id = ? LIMIT 1";
+                        $account_stmt = $link->pdo->prepare($account_type_query);
+                        $account_stmt->execute([$cuenta_id]);
+                        $account_data = $account_stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        $is_debt_account = in_array($account_data['tipo'] ?? '', ['tarjeta_credito', 'prestamo_personal']);
+                        
+                        // Lógica de actualización de balance:
+                        // - Para cuentas normales: ingreso aumenta, gasto disminuye
+                        // - Para cuentas de deuda: ingreso reduce deuda, gasto aumenta deuda
+                        //   PERO si es un "gasto" en una deuda, normalmente es un pago que reduce la deuda
+                        if ($is_debt_account) {
+                            // En cuentas de deuda, un "gasto" es realmente un pago que reduce la deuda
+                            // Un "ingreso" sería un cargo que aumenta la deuda
+                            $balance_change = ($tipo == 'gasto') ? $monto : -$monto;
+                        } else {
+                            // En cuentas normales, lógica estándar
+                            $balance_change = ($tipo == 'ingreso') ? $monto : -$monto;
+                        }
+                        
+                        $update_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
+                        $stmt2 = $link->pdo->prepare($update_balance);
+                        $stmt2->execute([$balance_change, $cuenta_id]);
+
+                        // If it's a transfer, handle the destination account
+                        if ($tipo == 'transferencia' && !empty($_POST["cuenta_destino_id"])) {
+                            $cuenta_destino_id = intval($_POST["cuenta_destino_id"]);
+                            $update_dest_balance = "UPDATE cuentas_bancarias SET balance_actual = balance_actual + ? WHERE id = ?";
+                            $stmt3 = $link->pdo->prepare($update_dest_balance);
+                            $stmt3->execute([$monto, $cuenta_destino_id]);
+
+                            $insert_transfer = "INSERT INTO transferencias (usuario_id, cuenta_origen_id, cuenta_destino_id, monto, descripcion, fecha) VALUES (?, ?, ?, ?, ?, ?)";
+                            $stmt4 = $link->pdo->prepare($insert_transfer);
+                            $stmt4->execute([$user_id, $cuenta_id, $cuenta_destino_id, $monto, $descripcion, $fecha]);
+                        }
+
+                        $link->pdo->commit();
+                        $success_message = "Transacción agregada exitosamente!";
+
+                        // Clear form
+                        $descripcion = $monto = $tipo = $categoria_id = $cuenta_id = $notas = "";
+                        $fecha = date('Y-m-d');
+                    } else {
+                        $error_info = $stmt->errorInfo();
+                        throw new Exception("Error al insertar transacción: " . (isset($error_info[2]) ? $error_info[2] : 'Error desconocido'));
+                    }
+                } else {
+                    $stmt = mysqli_prepare($link, $sql);
                     mysqli_stmt_bind_param($stmt, "iiisdsissss", $user_id, $cuenta_id, $categoria_id, $descripcion, $monto, $tipo, $fecha, $notas, $recurrente, $frecuencia, $fecha_fin);
                     if (mysqli_stmt_execute($stmt)) {
                         $transaction_id = mysqli_insert_id($link);
@@ -308,7 +430,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
 
         } catch (Exception $e) {
-            mysqli_rollback($link);
+            if (isset($link->pdo)) {
+                $link->pdo->rollBack();
+            } else {
+                mysqli_rollback($link);
+            }
             $success_message = "Error: " . $e->getMessage();
         }
     }

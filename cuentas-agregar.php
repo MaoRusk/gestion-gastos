@@ -18,23 +18,29 @@ $is_view = ($mode === 'view' && $id > 0);
 // If editing or viewing, load the existing account and ensure ownership
 if (($is_edit || $is_view) && $id > 0) {
     $sql = "SELECT * FROM cuentas_bancarias WHERE id = ? LIMIT 1";
-    if ($stmt = mysqli_prepare($link, $sql)) {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($sql);
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $stmt = mysqli_prepare($link, $sql);
         mysqli_stmt_bind_param($stmt, 'i', $id);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         $row = mysqli_fetch_assoc($res);
         mysqli_stmt_close($stmt);
+    }
 
-        if (!$row) {
-            // Not found
-            header('Location: cuentas-lista.php');
-            exit;
-        }
+    if (!$row) {
+        // Not found
+        header('Location: cuentas-lista.php');
+        exit;
+    }
 
-        // Ownership check
-        if ($row['usuario_id'] != getCurrentUserId()) {
-            die('No tienes permiso para ver/editar esta cuenta');
-        }
+    // Ownership check
+    if ($row['usuario_id'] != getCurrentUserId()) {
+        die('No tienes permiso para ver/editar esta cuenta');
+    }
 
         // Prefill variables from DB when editing or viewing
         $nombre = $row['nombre'];
@@ -116,91 +122,72 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($post_mode === 'edit' && $post_id > 0) {
             // Update existing account (ownership checked earlier on GET; re-check here)
             $check_sql = "SELECT usuario_id FROM cuentas_bancarias WHERE id = ? LIMIT 1";
-            if ($cstmt = mysqli_prepare($link, $check_sql)) {
+            if (isset($link->pdo)) {
+                $cstmt = $link->pdo->prepare($check_sql);
+                $cstmt->execute([$post_id]);
+                $crow = $cstmt->fetch(PDO::FETCH_ASSOC);
+            } else {
+                $cstmt = mysqli_prepare($link, $check_sql);
                 mysqli_stmt_bind_param($cstmt, 'i', $post_id);
                 mysqli_stmt_execute($cstmt);
                 $cres = mysqli_stmt_get_result($cstmt);
                 $crow = mysqli_fetch_assoc($cres);
                 mysqli_stmt_close($cstmt);
+            }
 
-                if (!$crow || $crow['usuario_id'] != getCurrentUserId()) {
-                    die('No tienes permiso para editar esta cuenta');
-                }
+            if (!$crow || $crow['usuario_id'] != getCurrentUserId()) {
+                die('No tienes permiso para editar esta cuenta');
             }
 
             $sql = "UPDATE cuentas_bancarias SET nombre = ?, tipo = ?, banco = ?, numero_cuenta = ?, balance_actual = ?, limite_credito = ? WHERE id = ?";
-            if ($ustmt = mysqli_prepare($link, $sql)) {
-                // Check if using PDO (via database_compat.php) or mysqli
-                if (isset($link->pdo) && $ustmt instanceof PDOStatement) {
-                    // Using PDO - bind parameters directly
-                    $ustmt->bindValue(1, $nombre, PDO::PARAM_STR);
-                    $ustmt->bindValue(2, $tipo, PDO::PARAM_STR);
-                    $ustmt->bindValue(3, $banco, PDO::PARAM_STR);
-                    $ustmt->bindValue(4, $numero_cuenta, PDO::PARAM_STR);
-                    $ustmt->bindValue(5, $balance_inicial, PDO::PARAM_STR);
-                    $ustmt->bindValue(6, $limite_credito, $limite_credito !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
-                    $ustmt->bindValue(7, $post_id, PDO::PARAM_INT);
+            if (isset($link->pdo)) {
+                $ustmt = $link->pdo->prepare($sql);
+                if ($ustmt->execute([$nombre, $tipo, $banco, $numero_cuenta, $balance_inicial, $limite_credito, $post_id])) {
+                    $success_message = "Cuenta actualizada exitosamente!";
                 } else {
-                    // Using mysqli - use bind_param
-                    mysqli_stmt_bind_param($ustmt, 'ssssdsi', $nombre, $tipo, $banco, $numero_cuenta, $balance_inicial, $limite_credito, $post_id);
+                    $error_info = $ustmt->errorInfo();
+                    $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido';
+                    $success_message = "Error al actualizar la cuenta: " . $error_msg;
                 }
-
+            } else {
+                $ustmt = mysqli_prepare($link, $sql);
+                mysqli_stmt_bind_param($ustmt, 'ssssdsi', $nombre, $tipo, $banco, $numero_cuenta, $balance_inicial, $limite_credito, $post_id);
                 if (mysqli_stmt_execute($ustmt)) {
                     $success_message = "Cuenta actualizada exitosamente!";
                 } else {
-                    if (isset($link->pdo) && $ustmt instanceof PDOStatement) {
-                        $error_info = $ustmt->errorInfo();
-                        $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido';
-                    } else {
-                        $error_msg = mysqli_error($link);
-                    }
+                    $error_msg = mysqli_error($link);
                     $success_message = "Error al actualizar la cuenta: " . $error_msg;
                 }
-
                 mysqli_stmt_close($ustmt);
             }
         } else {
             // Insert new account
             $sql = "INSERT INTO cuentas_bancarias (usuario_id, nombre, tipo, banco, numero_cuenta, balance_actual, limite_credito) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-            if ($stmt = mysqli_prepare($link, $sql)) {
+            if (isset($link->pdo)) {
+                $stmt = $link->pdo->prepare($sql);
                 $param_usuario_id = getCurrentUserId();
-                $param_nombre = $nombre;
-                $param_tipo = $tipo;
-                $param_banco = $banco;
-                $param_numero_cuenta = $numero_cuenta;
-                $param_balance_actual = $balance_inicial;
-                $param_limite_credito = $limite_credito;
-
-                // Check if using PDO (via database_compat.php) or mysqli
-                if (isset($link->pdo) && $stmt instanceof PDOStatement) {
-                    // Using PDO - bind parameters directly
-                    $stmt->bindValue(1, $param_usuario_id, PDO::PARAM_INT);
-                    $stmt->bindValue(2, $param_nombre, PDO::PARAM_STR);
-                    $stmt->bindValue(3, $param_tipo, PDO::PARAM_STR);
-                    $stmt->bindValue(4, $param_banco, PDO::PARAM_STR);
-                    $stmt->bindValue(5, $param_numero_cuenta, PDO::PARAM_STR);
-                    $stmt->bindValue(6, $param_balance_actual, PDO::PARAM_STR);
-                    $stmt->bindValue(7, $param_limite_credito, $param_limite_credito !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
+                if ($stmt->execute([$param_usuario_id, $nombre, $tipo, $banco, $numero_cuenta, $balance_inicial, $limite_credito])) {
+                    $success_message = "Cuenta agregada exitosamente!";
+                    // Clear form
+                    $nombre = $tipo = $banco = $numero_cuenta = $balance_inicial = $limite_credito = "";
                 } else {
-                    // Using mysqli - use bind_param
-                    mysqli_stmt_bind_param($stmt, "issssdd", $param_usuario_id, $param_nombre, $param_tipo, $param_banco, $param_numero_cuenta, $param_balance_actual, $param_limite_credito);
+                    $error_info = $stmt->errorInfo();
+                    $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido';
+                    $success_message = "Error al agregar la cuenta: " . $error_msg;
                 }
-
+            } else {
+                $stmt = mysqli_prepare($link, $sql);
+                $param_usuario_id = getCurrentUserId();
+                mysqli_stmt_bind_param($stmt, "issssdd", $param_usuario_id, $nombre, $tipo, $banco, $numero_cuenta, $balance_inicial, $limite_credito);
                 if (mysqli_stmt_execute($stmt)) {
                     $success_message = "Cuenta agregada exitosamente!";
                     // Clear form
                     $nombre = $tipo = $banco = $numero_cuenta = $balance_inicial = $limite_credito = "";
                 } else {
-                    if (isset($link->pdo) && $stmt instanceof PDOStatement) {
-                        $error_info = $stmt->errorInfo();
-                        $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido';
-                    } else {
-                        $error_msg = mysqli_error($link);
-                    }
+                    $error_msg = mysqli_error($link);
                     $success_message = "Error al agregar la cuenta: " . $error_msg;
                 }
-
                 mysqli_stmt_close($stmt);
             }
         }

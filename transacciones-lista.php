@@ -12,37 +12,41 @@ requireAuth();
 // Get user's transactions with filters
 $user_id = getCurrentUserId();
 
+// Detectar tipo de base de datos para compatibilidad
+$isSqlite = isset($link->type) && $link->type === 'sqlite';
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+$isMysql = isset($link->type) && $link->type === 'mysql';
+
+// Condición para activa según el tipo de BD
+$activaCondition = $isPostgres ? 'activa = TRUE' : 'activa = 1';
+$predefCondition = $isPostgres ? 'es_predefinida = TRUE' : 'es_predefinida = 1';
+
 // Build filter conditions
 $where_conditions = ["t.usuario_id = ?"];
 $params = [$user_id];
-$param_types = "i";
 
 // Filter by type
 if (!empty($_GET['tipo'])) {
     $where_conditions[] = "t.tipo = ?";
     $params[] = $_GET['tipo'];
-    $param_types .= "s";
 }
 
 // Filter by category
 if (!empty($_GET['categoria_id'])) {
     $where_conditions[] = "t.categoria_id = ?";
     $params[] = intval($_GET['categoria_id']);
-    $param_types .= "i";
 }
 
 // Filter by date
 if (!empty($_GET['fecha'])) {
     $where_conditions[] = "t.fecha = ?";
     $params[] = $_GET['fecha'];
-    $param_types .= "s";
 }
 
 // Filter by search term
 if (!empty($_GET['buscar'])) {
     $where_conditions[] = "t.descripcion LIKE ?";
     $params[] = "%" . $_GET['buscar'] . "%";
-    $param_types .= "s";
 }
 
 $where_clause = implode(" AND ", $where_conditions);
@@ -57,25 +61,36 @@ $sql = "SELECT t.*, c.nombre as categoria_nombre, c.color as categoria_color, c.
         ORDER BY t.fecha DESC, t.fecha_creacion DESC
         LIMIT 50";
 
-$stmt = mysqli_prepare($link, $sql);
-if (!empty($params)) {
-    mysqli_stmt_bind_param($stmt, $param_types, ...$params);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql);
+    $stmt->execute($params);
+    $transacciones = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql);
+    if (!empty($params)) {
+        $param_types = str_repeat('s', count($params));
+        mysqli_stmt_bind_param($stmt, $param_types, ...$params);
+    }
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $transacciones = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
 }
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$transacciones = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
 
 // Get categories for filter
-$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
-$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
-$sql_categories = "SELECT id, nombre, tipo FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition . " ORDER BY tipo, nombre";
-$stmt = mysqli_prepare($link, $sql_categories);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+$sql_categories = "SELECT id, nombre, tipo FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activaCondition . " ORDER BY tipo, nombre";
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_categories);
+    $stmt->execute([$user_id]);
+    $categorias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql_categories);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // Calculate totals
 $total_ingresos = 0;
