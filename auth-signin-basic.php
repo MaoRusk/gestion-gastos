@@ -124,9 +124,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             </div>
                     
                                             <div class="mb-3 <?php echo (!empty($password_err)) ? 'has-error' : ''; ?>">
-                                                <div class="float-end">
+                                                <!-- <div class="float-end">
                                                     <a href="auth-pass-reset-basic.php" class="text-muted">¿Olvidaste tu contraseña?</a>
-                                                </div>
+                                                </div> -->
                                                 <label class="form-label" for="password-input">Contraseña</label>
                                                 <div class="position-relative auth-pass-inputgroup mb-3">
                                                     <input type="password" class="form-control pe-5 password-input" name="password" placeholder="Ingresa tu contraseña" id="password-input">
