@@ -10,14 +10,21 @@ $profile_user = null;
 if ($profile_id) {
     // Safely fetch the user by id
     $sql = "SELECT id, nombre, email, telefono, fecha_nacimiento, genero, ciudad, estado, activo, fecha_creacion FROM usuarios WHERE id = ? LIMIT 1";
-    $stmt = mysqli_prepare($link, $sql);
-    if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "i", $profile_id);
-        if (mysqli_stmt_execute($stmt)) {
-            $res = mysqli_stmt_get_result($stmt);
-            if ($res && ($row = mysqli_fetch_assoc($res))) {
-                $profile_user = $row;
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($sql);
+        $stmt->execute([$profile_id]);
+        $profile_user = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $stmt = mysqli_prepare($link, $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "i", $profile_id);
+            if (mysqli_stmt_execute($stmt)) {
+                $res = mysqli_stmt_get_result($stmt);
+                if ($res && ($row = mysqli_fetch_assoc($res))) {
+                    $profile_user = $row;
+                }
             }
+            mysqli_stmt_close($stmt);
         }
     }
 }
