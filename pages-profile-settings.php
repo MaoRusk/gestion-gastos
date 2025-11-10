@@ -29,18 +29,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     // Do not allow changing email from this form. Only update allowed fields.
     $sql = "UPDATE usuarios SET nombre = ?, telefono = ?, fecha_nacimiento = ?, genero = ?, ciudad = ?, estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?";
-    $stmt = mysqli_prepare($link, $sql);
-    if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "ssssssi", $nombre, $telefono, $fecha_nacimiento, $genero, $city, $country, $current_user_id);
-        if (mysqli_stmt_execute($stmt)) {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($sql);
+        if ($stmt->execute([$nombre, $telefono, $fecha_nacimiento, $genero, $city, $country, $current_user_id])) {
             $update_message = ['type' => 'success', 'text' => 'Perfil actualizado correctamente.'];
             // update session name/email
             $_SESSION['user_name'] = $nombre;
         } else {
-            $update_message = ['type' => 'error', 'text' => 'Error al actualizar el perfil: ' . mysqli_error($link)];
+            $error_info = $stmt->errorInfo();
+            $update_message = ['type' => 'error', 'text' => 'Error al actualizar el perfil: ' . (isset($error_info[2]) ? $error_info[2] : 'Error desconocido')];
         }
     } else {
-        $update_message = ['type' => 'error', 'text' => 'Error preparando la consulta: ' . mysqli_error($link)];
+        $stmt = mysqli_prepare($link, $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "ssssssi", $nombre, $telefono, $fecha_nacimiento, $genero, $city, $country, $current_user_id);
+            if (mysqli_stmt_execute($stmt)) {
+                $update_message = ['type' => 'success', 'text' => 'Perfil actualizado correctamente.'];
+                // update session name/email
+                $_SESSION['user_name'] = $nombre;
+            } else {
+                $update_message = ['type' => 'error', 'text' => 'Error al actualizar el perfil: ' . mysqli_error($link)];
+            }
+            mysqli_stmt_close($stmt);
+        } else {
+            $update_message = ['type' => 'error', 'text' => 'Error preparando la consulta: ' . mysqli_error($link)];
+        }
     }
 }
 
@@ -55,26 +68,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     } else {
         // fetch current hash
         $sql = "SELECT password_hash FROM usuarios WHERE id = ? LIMIT 1";
-        $stmt = mysqli_prepare($link, $sql);
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, 'i', $current_user_id);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            $row = $res ? mysqli_fetch_assoc($res) : null;
+        if (isset($link->pdo)) {
+            $stmt = $link->pdo->prepare($sql);
+            $stmt->execute([$current_user_id]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($row && password_verify($old, $row['password_hash'])) {
                 $newhash = password_hash($new, PASSWORD_DEFAULT);
                 $up = "UPDATE usuarios SET password_hash = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?";
-                $ust = mysqli_prepare($link, $up);
-                if ($ust) {
-                    mysqli_stmt_bind_param($ust, 'si', $newhash, $current_user_id);
-                    if (mysqli_stmt_execute($ust)) {
-                        $update_message = ['type' => 'success', 'text' => 'Contraseña actualizada correctamente.'];
-                    } else {
-                        $update_message = ['type' => 'error', 'text' => 'Error al actualizar la contraseña.'];
-                    }
+                $ust = $link->pdo->prepare($up);
+                if ($ust->execute([$newhash, $current_user_id])) {
+                    $update_message = ['type' => 'success', 'text' => 'Contraseña actualizada correctamente.'];
+                } else {
+                    $update_message = ['type' => 'error', 'text' => 'Error al actualizar la contraseña.'];
                 }
             } else {
                 $update_message = ['type' => 'error', 'text' => 'Contraseña actual incorrecta.'];
+            }
+        } else {
+            $stmt = mysqli_prepare($link, $sql);
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'i', $current_user_id);
+                mysqli_stmt_execute($stmt);
+                $res = mysqli_stmt_get_result($stmt);
+                $row = $res ? mysqli_fetch_assoc($res) : null;
+                if ($row && password_verify($old, $row['password_hash'])) {
+                    $newhash = password_hash($new, PASSWORD_DEFAULT);
+                    $up = "UPDATE usuarios SET password_hash = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?";
+                    $ust = mysqli_prepare($link, $up);
+                    if ($ust) {
+                        mysqli_stmt_bind_param($ust, 'si', $newhash, $current_user_id);
+                        if (mysqli_stmt_execute($ust)) {
+                            $update_message = ['type' => 'success', 'text' => 'Contraseña actualizada correctamente.'];
+                        } else {
+                            $update_message = ['type' => 'error', 'text' => 'Error al actualizar la contraseña.'];
+                        }
+                        mysqli_stmt_close($ust);
+                    }
+                } else {
+                    $update_message = ['type' => 'error', 'text' => 'Contraseña actual incorrecta.'];
+                }
+                mysqli_stmt_close($stmt);
             }
         }
     }
@@ -83,12 +116,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Load current user data to prefill the form
 $user = null;
 $sql = "SELECT nombre, email, telefono, fecha_nacimiento, genero, ciudad, estado, fecha_creacion FROM usuarios WHERE id = ? LIMIT 1";
-$stmt = mysqli_prepare($link, $sql);
-if ($stmt) {
-    mysqli_stmt_bind_param($stmt, 'i', $current_user_id);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    if ($res) $user = mysqli_fetch_assoc($res);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql);
+    $stmt->execute([$current_user_id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, 'i', $current_user_id);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        if ($res) $user = mysqli_fetch_assoc($res);
+        mysqli_stmt_close($stmt);
+    }
 }
 
 // Prepare nombre for UI (full name stored in single column)

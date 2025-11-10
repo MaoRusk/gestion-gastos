@@ -25,46 +25,58 @@ $descripcion = isset($descripcion) ? $descripcion : '';
 $nombre_err = $monto_limite_err = $categoria_err = $fecha_inicio_err = $fecha_fin_err = "";
 $success_message = "";
 
-// Make category query DB-aware (es_predefinida / activa) for compatibility
-$predefCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
-$activeCondition = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'c.activa = TRUE' : 'c.activa = 1';
+// Detectar tipo de base de datos para compatibilidad
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+$predefCondition = $isPostgres ? 'c.es_predefinida = TRUE' : 'c.es_predefinida = 1';
+$activeCondition = $isPostgres ? 'c.activa = TRUE' : 'c.activa = 1';
 
 // Re-run categories query (replace earlier non-DB-aware sql)
 $user_id = getCurrentUserId();
 $sql_categories = "SELECT id, nombre, color, icono FROM categorias c WHERE (usuario_id = ? OR " . $predefCondition . ") AND " . $activeCondition . " AND tipo = 'gasto' ORDER BY nombre";
-$stmt = mysqli_prepare($link, $sql_categories);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
-mysqli_stmt_close($stmt);
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->prepare($sql_categories);
+    $stmt->execute([$user_id]);
+    $categorias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $stmt = mysqli_prepare($link, $sql_categories);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $categorias = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+}
 
 // If editing or viewing, load existing presupuesto to prefill
 if (($is_edit || $is_view) && $id > 0) {
     $sql = "SELECT * FROM presupuestos WHERE id = ? LIMIT 1";
-    if ($stmt = mysqli_prepare($link, $sql)) {
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($sql);
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    } else {
+        $stmt = mysqli_prepare($link, $sql);
         mysqli_stmt_bind_param($stmt, 'i', $id);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         $row = mysqli_fetch_assoc($res);
         mysqli_stmt_close($stmt);
-
-        if (!$row) {
-            header('Location: presupuestos-lista.php');
-            exit;
-        }
-
-        if ($row['usuario_id'] != $user_id) {
-            die('No tienes permiso para ver/editar este presupuesto');
-        }
-
-        $nombre = $row['nombre'];
-        $monto_limite = $row['monto_limite'];
-        $categoria_id = $row['categoria_id'];
-        $fecha_inicio = $row['fecha_inicio'];
-        $fecha_fin = $row['fecha_fin'];
-        $descripcion = $row['descripcion'];
     }
+
+    if (!$row) {
+        header('Location: presupuestos-lista.php');
+        exit;
+    }
+
+    if ($row['usuario_id'] != $user_id) {
+        die('No tienes permiso para ver/editar este presupuesto');
+    }
+
+    $nombre = $row['nombre'];
+    $monto_limite = $row['monto_limite'];
+    $categoria_id = $row['categoria_id'];
+    $fecha_inicio = $row['fecha_inicio'];
+    $fecha_fin = $row['fecha_fin'];
+    $descripcion = $row['descripcion'];
 }
 
 // Processing form data when form is submitted
@@ -124,21 +136,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($post_mode === 'edit' && $post_id > 0) {
             // Re-check ownership
             $check_sql = "SELECT usuario_id FROM presupuestos WHERE id = ? LIMIT 1";
-            if ($cstmt = mysqli_prepare($link, $check_sql)) {
+            if (isset($link->pdo)) {
+                $cstmt = $link->pdo->prepare($check_sql);
+                $cstmt->execute([$post_id]);
+                $crow = $cstmt->fetch(PDO::FETCH_ASSOC);
+            } else {
+                $cstmt = mysqli_prepare($link, $check_sql);
                 mysqli_stmt_bind_param($cstmt, 'i', $post_id);
                 mysqli_stmt_execute($cstmt);
                 $cres = mysqli_stmt_get_result($cstmt);
                 $crow = mysqli_fetch_assoc($cres);
                 mysqli_stmt_close($cstmt);
+            }
 
-                if (!$crow || $crow['usuario_id'] != $user_id) {
-                    die('No tienes permiso para editar este presupuesto');
-                }
+            if (!$crow || $crow['usuario_id'] != $user_id) {
+                die('No tienes permiso para editar este presupuesto');
             }
 
             // Update presupuesto
             $update_sql = "UPDATE presupuestos SET nombre = ?, monto_limite = ?, categoria_id = ?, fecha_inicio = ?, fecha_fin = ?, descripcion = ? WHERE id = ?";
-            if ($ust = mysqli_prepare($link, $update_sql)) {
+            if (isset($link->pdo)) {
+                $ust = $link->pdo->prepare($update_sql);
+                if ($ust->execute([$nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion, $post_id])) {
+                    $success_message = "Presupuesto actualizado exitosamente!";
+                } else {
+                    $error_info = $ust->errorInfo();
+                    $success_message = "Error al actualizar: " . (isset($error_info[2]) ? $error_info[2] : 'Error desconocido');
+                }
+            } else {
+                $ust = mysqli_prepare($link, $update_sql);
                 mysqli_stmt_bind_param($ust, 'sdisssi', $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion, $post_id);
                 if (mysqli_stmt_execute($ust)) {
                     $success_message = "Presupuesto actualizado exitosamente!";
@@ -151,33 +177,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             // Insert new budget
             // Use TRUE for PostgreSQL, 1 for MySQL/SQLite
-            $activo_value = (defined('DB_TYPE') && DB_TYPE === 'postgresql') ? 'TRUE' : '1';
+            $activo_value = $isPostgres ? 'TRUE' : '1';
             $sql = "INSERT INTO presupuestos (usuario_id, nombre, monto_limite, categoria_id, fecha_inicio, fecha_fin, descripcion, activo) VALUES (?, ?, ?, ?, ?, ?, ?, " . $activo_value . ")";
 
-            if ($stmt = mysqli_prepare($link, $sql)) {
+            if (isset($link->pdo)) {
+                $stmt = $link->pdo->prepare($sql);
+                if ($stmt->execute([$user_id, $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion])) {
+                    $success_message = "Presupuesto creado exitosamente!";
+                    // Clear form
+                    $nombre = $monto_limite = $categoria_id = $fecha_inicio = $fecha_fin = $descripcion = "";
+                } else {
+                    $error_info = $stmt->errorInfo();
+                    $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido al ejecutar la consulta';
+                    $success_message = "Error al crear presupuesto: " . $error_msg;
+                }
+            } else {
+                $stmt = mysqli_prepare($link, $sql);
                 mysqli_stmt_bind_param($stmt, "isdisss", $user_id, $nombre, $monto_limite, $categoria_id, $fecha_inicio, $fecha_fin, $descripcion);
                 if (mysqli_stmt_execute($stmt)) {
                     $success_message = "Presupuesto creado exitosamente!";
                     // Clear form
                     $nombre = $monto_limite = $categoria_id = $fecha_inicio = $fecha_fin = $descripcion = "";
                 } else {
-                    // Get detailed error message
                     $error_msg = mysqli_error($link);
-                    if (empty($error_msg) && isset($link->pdo) && $stmt instanceof PDOStatement) {
-                        $error_info = $stmt->errorInfo();
-                        $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido al ejecutar la consulta';
-                    }
                     $success_message = "Error al crear presupuesto: " . $error_msg;
                 }
                 mysqli_stmt_close($stmt);
-            } else {
-                // Get detailed error message for prepare failure
-                $error_msg = mysqli_error($link);
-                if (empty($error_msg) && isset($link->pdo) && $link->pdo instanceof PDO) {
-                    $error_info = $link->pdo->errorInfo();
-                    $error_msg = isset($error_info[2]) ? $error_info[2] : 'Error desconocido al preparar la consulta';
-                }
-                $success_message = "Error al preparar la consulta: " . $error_msg;
             }
         }
     }

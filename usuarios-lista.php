@@ -20,16 +20,24 @@ if (!isAdmin()) {
 // Check if user is admin (for now, we'll assume all logged users can see users)
 $user_id = getCurrentUserId();
 
+// Detectar tipo de base de datos para compatibilidad
+$isPostgres = isset($link->type) && $link->type === 'postgresql';
+
 // Get all users
 $sql = "SELECT id, nombre, email, telefono, fecha_nacimiento, genero, ciudad, estado, 
                activo, fecha_creacion, fecha_actualizacion
         FROM usuarios 
         ORDER BY fecha_creacion DESC";
-$result = mysqli_query($link, $sql);
-$users = [];
-if ($result) {
-    while ($row = mysqli_fetch_assoc($result)) {
-        $users[] = $row;
+if (isset($link->pdo)) {
+    $stmt = $link->pdo->query($sql);
+    $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $result = mysqli_query($link, $sql);
+    $users = [];
+    if ($result) {
+        while ($row = mysqli_fetch_assoc($result)) {
+            $users[] = $row;
+        }
     }
 }
 
@@ -39,15 +47,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['toggle_user'])) {
     $new_status = intval($_POST['new_status']);
     
     $update_sql = "UPDATE usuarios SET activo = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?";
-    $stmt = mysqli_prepare($link, $update_sql);
-    mysqli_stmt_bind_param($stmt, "ii", $new_status, $target_user_id);
-    
-    if (mysqli_stmt_execute($stmt)) {
-        $message = $new_status ? "Usuario activado exitosamente" : "Usuario desactivado exitosamente";
-        $message_type = "success";
+    if (isset($link->pdo)) {
+        $stmt = $link->pdo->prepare($update_sql);
+        if ($stmt->execute([$new_status, $target_user_id])) {
+            $message = $new_status ? "Usuario activado exitosamente" : "Usuario desactivado exitosamente";
+            $message_type = "success";
+        } else {
+            $message = "Error al actualizar el usuario";
+            $message_type = "error";
+        }
     } else {
-        $message = "Error al actualizar el usuario";
-        $message_type = "error";
+        $stmt = mysqli_prepare($link, $update_sql);
+        mysqli_stmt_bind_param($stmt, "ii", $new_status, $target_user_id);
+        
+        if (mysqli_stmt_execute($stmt)) {
+            $message = $new_status ? "Usuario activado exitosamente" : "Usuario desactivado exitosamente";
+            $message_type = "success";
+        } else {
+            $message = "Error al actualizar el usuario";
+            $message_type = "error";
+        }
+        mysqli_stmt_close($stmt);
     }
     
     // Redirect to avoid resubmission

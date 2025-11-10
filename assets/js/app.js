@@ -744,38 +744,56 @@ File: Main Js File
 
 	function toggleHamburgerMenu() {
 		var windowSize = document.documentElement.clientWidth;
+		var hamburgerIcon = document.querySelector(".hamburger-icon");
 
-		if (windowSize > 767)
-			document.querySelector(".hamburger-icon").classList.toggle("open");
+		if (windowSize > 767 && hamburgerIcon) {
+			hamburgerIcon.classList.toggle("open");
+			// Guardar estado del menú hamburger
+			var isOpen = hamburgerIcon.classList.contains("open");
+			sessionStorage.setItem("hamburger-open", isOpen ? "true" : "false");
+		}
 
 		//For collapse horizontal menu
 		if (document.documentElement.getAttribute("data-layout") === "horizontal") {
-			document.body.classList.contains("menu") ? document.body.classList.remove("menu") : document.body.classList.add("menu");
+			var hasMenu = document.body.classList.contains("menu");
+			if (hasMenu) {
+				document.body.classList.remove("menu");
+			} else {
+				document.body.classList.add("menu");
+			}
+			sessionStorage.setItem("menu-collapsed", hasMenu ? "false" : "true");
 		}
 
 		//For collapse vertical menu
 		if (document.documentElement.getAttribute("data-layout") === "vertical") {
 			if (windowSize < 1025 && windowSize > 767) {
 				document.body.classList.remove("vertical-sidebar-enable");
-				document.documentElement.getAttribute("data-sidebar-size") == "sm" ?
-					document.documentElement.setAttribute("data-sidebar-size", "") :
-					document.documentElement.setAttribute("data-sidebar-size", "sm");
+				var currentSize = document.documentElement.getAttribute("data-sidebar-size");
+				var newSize = (currentSize == "sm") ? "" : "sm";
+				document.documentElement.setAttribute("data-sidebar-size", newSize);
+				sessionStorage.setItem("data-sidebar-size", newSize);
 			} else if (windowSize > 1025) {
 				document.body.classList.remove("vertical-sidebar-enable");
-				document.documentElement.getAttribute("data-sidebar-size") == "lg" ?
-					document.documentElement.setAttribute("data-sidebar-size", "sm") :
-					document.documentElement.setAttribute("data-sidebar-size", "lg");
+				var currentSize = document.documentElement.getAttribute("data-sidebar-size");
+				var newSize = (currentSize == "lg") ? "sm" : "lg";
+				document.documentElement.setAttribute("data-sidebar-size", newSize);
+				sessionStorage.setItem("data-sidebar-size", newSize);
 			} else if (windowSize <= 767) {
 				document.body.classList.add("vertical-sidebar-enable");
 				document.documentElement.setAttribute("data-sidebar-size", "lg");
+				sessionStorage.setItem("data-sidebar-size", "lg");
 			}
 		}
 
 		//Two column menu
 		if (document.documentElement.getAttribute("data-layout") == "twocolumn") {
-			document.body.classList.contains("twocolumn-panel") ?
-				document.body.classList.remove("twocolumn-panel") :
+			var hasPanel = document.body.classList.contains("twocolumn-panel");
+			if (hasPanel) {
+				document.body.classList.remove("twocolumn-panel");
+			} else {
 				document.body.classList.add("twocolumn-panel");
+			}
+			sessionStorage.setItem("twocolumn-panel", hasPanel ? "false" : "true");
 		}
 	}
 
@@ -811,6 +829,15 @@ File: Main Js File
 		});
 
 		window.addEventListener("load", function () {
+			// Restaurar estado del menú hamburger después de que todo esté cargado
+			var hamburgerOpen = sessionStorage.getItem("hamburger-open");
+			if (hamburgerOpen === "true") {
+				var hamburgerIcon = document.querySelector(".hamburger-icon");
+				if (hamburgerIcon) {
+					hamburgerIcon.classList.add("open");
+				}
+			}
+			
 			var isTwoColumn = document.documentElement.getAttribute("data-layout");
 			if (isTwoColumn == "twocolumn") {
 				initTwoColumnActiveMenu();
@@ -1755,9 +1782,39 @@ File: Main Js File
 	function setLayoutMode(mode, modeType, modeTypeId, html) {
 		var isModeTypeId = document.getElementById(modeTypeId);
 		html.setAttribute(mode, modeType);
+		// Guardar en sessionStorage para persistir entre páginas
+		sessionStorage.setItem(mode, modeType);
 		if (isModeTypeId) {
 			document.getElementById(modeTypeId).click();
 		}
+	}
+
+	function restoreLayoutState() {
+		// Esta función se ejecuta después de que layout.js haya cargado los atributos
+		// Solo necesitamos restaurar el estado del menú hamburger y otros estados específicos
+		
+		// Restaurar estado del menú hamburger después de que el DOM esté listo
+		setTimeout(function() {
+			var hamburgerOpen = sessionStorage.getItem("hamburger-open");
+			if (hamburgerOpen === "true") {
+				var hamburgerIcon = document.querySelector(".hamburger-icon");
+				if (hamburgerIcon) {
+					hamburgerIcon.classList.add("open");
+				}
+			}
+			
+			// Restaurar estado del menú colapsado (horizontal)
+			var menuCollapsed = sessionStorage.getItem("menu-collapsed");
+			if (menuCollapsed === "true") {
+				document.body.classList.add("menu");
+			}
+			
+			// Restaurar panel de dos columnas
+			var twocolumnPanel = sessionStorage.getItem("twocolumn-panel");
+			if (twocolumnPanel === "true") {
+				document.body.classList.add("twocolumn-panel");
+			}
+		}, 100);
 	}
 
 	function initModeSetting() {
@@ -1765,9 +1822,9 @@ File: Main Js File
 		var lightDarkBtn = document.querySelectorAll(".light-dark-mode");
 		if (lightDarkBtn && lightDarkBtn.length) {
 			lightDarkBtn[0].addEventListener("click", function (event) {
-				html.hasAttribute("data-layout-mode") && html.getAttribute("data-layout-mode") == "dark" ?
-					setLayoutMode("data-layout-mode", "light", "layout-mode-light", html) :
-					setLayoutMode("data-layout-mode", "dark", "layout-mode-dark", html);
+				var currentMode = html.getAttribute("data-layout-mode");
+				var newMode = (currentMode == "dark") ? "light" : "dark";
+				setLayoutMode("data-layout-mode", newMode, newMode == "dark" ? "layout-mode-dark" : "layout-mode-light", html);
 			});
 		}
 	}
@@ -1783,6 +1840,7 @@ File: Main Js File
 
 	function init() {
 		setDefaultAttribute();
+		restoreLayoutState(); // Restaurar estado del layout antes de inicializar otros componentes
 		twoColumnMenuGenerate();
 		isCustomDropdown();
 		isCustomDropdownResponsive();
